@@ -5,7 +5,7 @@ import zlib
 import struct
 
 # 读取XML文件
-xml_file_path = "map/map3.xml"  # 替换为你的TMX文件路径
+xml_file_path = "map/map0.xml"  # 替换为你的TMX文件路径
 tree = ET.parse(xml_file_path)
 root = tree.getroot()
 

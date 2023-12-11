@@ -1,4 +1,5 @@
 import base64
+import os
 import struct
 import sys
 import zlib
@@ -44,13 +45,41 @@ def load_map(xml_file_path):
 
     return tile_ids, image_source, width, height, tilewidth, tileheight
 
+def get_rect_from_tile_id(tile_id, tile_width, tile_height):
+    if tile_id != 0:
+        rec_x = tile_id % 8 - 1
+        if rec_x < 0:
+            rec_x = 7
+            rec_y = tile_id // 8 - 1
+        else:
+            rec_y = tile_id // 8
+        tile_rect = pygame.Rect(rec_x * tile_width, rec_y * tile_height,
+                                tile_width, tile_height)
+
+    return tile_rect
 
 def run_game():
-    pygame.init()  # 初始化pygame
-    scene_image = np.zeros((10240, 10240))
+    # # 首先加载都有哪些地图
+    # num_xml_file = 0
+    # for file in os.listdir('map'):
+    #     if file.endswith(".xml"):
+    #         num_xml_file += 1
+    # for i in range(num_xml_file):
+    #     print(f'{i}: map{i}.xml')
+    #
+    # idx = int(input('please select map to load: '))
+    # select_map_name = f'map{idx}.xml'
+    # print(select_map_name)
+    # =========================================================================
 
-    size = 640, 640  # 设置窗口大小
-    screen = pygame.display.set_mode(size)  # 显示窗口
+    tile_ids, image_source, width, height, tile_width, tile_height = load_map(xml_file_path="map/map0.xml")
+    # 加载游戏图像资源
+    template_image = pygame.image.load(image_source)
+    start_point = 0 * width * tile_width, 0 * height * tile_height
+
+    pygame.init()  # 初始化pygame
+    game_window_size = 1080, 720  # 设置窗口大小
+    screen = pygame.display.set_mode(game_window_size)  # 显示窗口
     pygame.display.set_caption("FightingAircraft")
     color = (0, 0, 0)  # 设置颜色
 
@@ -61,12 +90,21 @@ def run_game():
                 pygame.quit()  # 退出pygame
                 sys.exit(0)
 
+        # 开始加载图像并绘图
+        x_tile_block = int(start_point[0] / tile_width)
+        y_tile_block = int(start_point[1] / tile_height)
+        for i in range(x_tile_block-2, x_tile_block+2):
+            for j in range(y_tile_block-1, y_tile_block+1):
+                # 首先判断出该位置对应的 id 是多少
+                id = tile_ids[i*width+j]
+                tile_rect = get_rect_from_tile_id(id, tile_width=tile_width, tile_height=tile_height)
+                screen.blit(template_image,
+                    (0.5*game_window_size[0]+(i-x_tile_block)*tile_width,
+                     0.5*game_window_size[1]+(j-y_tile_block)*tile_height), tile_rect)
+
         pygame.display.flip()  # 更新全部显示
 
 
-
-
 if __name__ == '__main__':
-    load_map(xml_file_path="map/map0.xml")
     run_game()
 
