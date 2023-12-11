@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Created with TexturePacker http://www.codeandweb.com/texturepacker-->
+<!-- $TexturePacker:SmartUpdate:6fa7cccc22a4b3f8e1232fc27730aa08:e3d3ea0ed204eb6e55af18937f99b7eb:dedfb38ea3ec229d280d42d511996b82$ -->
+<TextureAtlas imagePath="boat.png">
+    <SubTexture name="boat/body" x="2" y="64" width="200" height="60"/>
+    <SubTexture name="boat/ruins" x="2" y="2" width="200" height="60"/>
+</TextureAtlas>

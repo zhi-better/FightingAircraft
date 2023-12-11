@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<map version="1.0" orientation="orthogonal" renderorder="right-down" width="40" height="40" tilewidth="256" tileheight="256" nextobjectid="1">
+ <tileset firstgid="1" name="templet1" tilewidth="256" tileheight="256">
+  <image source="templet1.png" width="2048" height="2048"/>
+  <terraintypes>
+   <terrain name="海面" tile="48"/>
+   <terrain name="丛林" tile="9"/>
+   <terrain name="沙地" tile="33"/>
+   <terrain name="深海" tile="14"/>
+   <terrain name="浅海" tile="38"/>
+  </terraintypes>
+  <tile id="0" terrain=",,,1"/>
+  <tile id="1" terrain=",,1,1"/>
+  <tile id="2" terrain=",,1,"/>
+  <tile id="3" terrain="1,1,1,"/>
+  <tile id="4" terrain="1,1,,1"/>
+  <tile id="5" terrain=",,,3"/>
+  <tile id="6" terrain=",,3,3"/>
+  <tile id="7" terrain=",,3,"/>
+  <tile id="8" terrain=",1,,1"/>
+  <tile id="9" terrain="1,1,1,1"/>
+  <tile id="10" terrain="1,,1,"/>
+  <tile id="11" terrain="1,,1,1"/>
+  <tile id="12" terrain=",1,1,1"/>
+  <tile id="13" terrain=",3,,3"/>
+  <tile id="14" terrain="3,3,3,3"/>
+  <tile id="15" terrain="3,,3,"/>
+  <tile id="16" terrain=",1,,"/>
+  <tile id="17" terrain="1,1,,"/>
+  <tile id="18" terrain="1,,,"/>
+  <tile id="19" terrain="3,3,3,"/>
+  <tile id="20" terrain="3,3,,3"/>
+  <tile id="21" terrain=",3,,"/>
+  <tile id="22" terrain="3,3,,"/>
+  <tile id="23" terrain="3,,,"/>
+  <tile id="24" terrain=",,,2"/>
+  <tile id="25" terrain=",,2,2"/>
+  <tile id="26" terrain=",,2,"/>
+  <tile id="27" terrain="3,,3,3"/>
+  <tile id="28" terrain=",3,3,3"/>
+  <tile id="29" terrain=",,,4"/>
+  <tile id="30" terrain=",,4,4"/>
+  <tile id="31" terrain=",,4,"/>
+  <tile id="32" terrain=",2,,2"/>
+  <tile id="33" terrain="2,2,2,2"/>
+  <tile id="34" terrain="2,,2,"/>
+  <tile id="35" terrain="2,2,2,"/>
+  <tile id="36" terrain="2,2,,2"/>
+  <tile id="37" terrain=",4,,4"/>
+  <tile id="38" terrain="4,4,4,4"/>
+  <tile id="39" terrain="4,,4,"/>
+  <tile id="40" terrain=",2,,"/>
+  <tile id="41" terrain="2,2,,"/>
+  <tile id="42" terrain="2,,,"/>
+  <tile id="43" terrain="2,,2,2"/>
+  <tile id="44" terrain=",2,2,2"/>
+  <tile id="45" terrain=",4,,"/>
+  <tile id="46" terrain="4,4,,"/>
+  <tile id="47" terrain="4,,,"/>
+  <tile id="54" terrain="4,4,4,"/>
+  <tile id="55" terrain="4,4,,4"/>
+  <tile id="62" terrain="4,,4,4"/>
+  <tile id="63" terrain=",4,4,4"/>
+ </tileset>
+ <layer name="块层 1" width="40" height="40">
+  <data encoding="base64" compression="zlib">
+   eJy9mM1SGzEQhJefEAcIMWAbDob4lHDC4QS3+P2fKlLVdqVrqmc0Wm9x6LK969J+2zMaSfM2DMObo+ein6Rd8N/PVmU7FP0mvXSOcVH0ddTC/FZadIz9y7BV/RVePjvfq26KfozaFj3Rb2hV9DDq8QjvPNbD+L1yvRb9oXE2RWvBxFoKX1s+Ku9aAqMdazN643EqX5cNvurDvujDMLw716P8hDcqtkqrjji/Ess7xY75wbw3sVU5qHLO+tryzvNSPdvmmxLiy3oM7kfe1VgszG+br+qaqiVz1jqOxZaeg5zhOcbXvDhuOxmxDuySsbA5kZljtpbwfV6HLAPXskz9vxAs2TnGucT3uV6hbu7EvQyfmm9eTUUMT4pOi86cMbkO2HoZsR/j3Wb8rGzfiy6LrgXjyXhNMb4E16d4Bzb4dUps0DXdw31w23WJ10Vm9Pi89RL11PrVo6vhfy3lNQgsYOd1IOvhkjybwqZib+s++KIctPnHvn2byGU99HyxsVcxZu9srk31bU4+Vb8yvp0XfZkQY4+vlYOsFl9luy+6LbpLcHqMPId7zhERH9h4/bxNMKo4R+tcdE6L+OAFz8VM/VEeRuucqpvsRxQ3VY+n1Juo/qk1xnLOUV+iOEf74IgRfmfyKiOe61G9yTDibIF3muJh5bkj8Vy/7+Rjn5XXPR6CawrDMcK7s8DMXs3Ndcz5RsXLnrVaz43+a/cF3hk0c47hc9TSXFP9IKz528HnVPsC5oEOQ3v9uRnHWNMzvT15trcBPrCBCzyZPgaEfX+rb+D1ZBQf9i1g87iivQXyTfVbVmZ85Ii3F/bePdNXY+84r56ceOGZHBO8o82rdYPP66t5PSDeL0Z9vvpMW1fVnERueHw8xn6I+1LRHFPzwM5d63NvT6RXtg/V6pvaudLT352T13LyXPkslh5fe7n+ARvLyiI=
+  </data>
+ </layer>
+</map>

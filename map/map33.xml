@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<map version="1.0" orientation="orthogonal" renderorder="right-down" width="25" height="25" tilewidth="256" tileheight="256" nextobjectid="1">
+ <tileset firstgid="1" name="templet2" tilewidth="256" tileheight="256">
+  <image source="templet2.png" width="2048" height="2048"/>
+  <terraintypes>
+   <terrain name="新地形" tile="48"/>
+   <terrain name="新地形" tile="9"/>
+   <terrain name="新地形" tile="33"/>
+   <terrain name="新地形" tile="38"/>
+   <terrain name="新地形" tile="14"/>
+  </terraintypes>
+  <tile id="0" terrain=",,,1"/>
+  <tile id="1" terrain=",,1,1"/>
+  <tile id="2" terrain=",,1,"/>
+  <tile id="3" terrain="1,1,1,"/>
+  <tile id="4" terrain="1,1,,1"/>
+  <tile id="5" terrain=",,,4"/>
+  <tile id="6" terrain=",,4,4"/>
+  <tile id="7" terrain=",,4,"/>
+  <tile id="8" terrain=",1,,1"/>
+  <tile id="9" terrain="1,1,1,1"/>
+  <tile id="10" terrain="1,,1,"/>
+  <tile id="11" terrain="1,,1,1"/>
+  <tile id="12" terrain=",1,1,1"/>
+  <tile id="13" terrain=",4,,4"/>
+  <tile id="14" terrain="4,4,4,4"/>
+  <tile id="15" terrain="4,,4,"/>
+  <tile id="16" terrain=",1,,"/>
+  <tile id="17" terrain="1,1,,"/>
+  <tile id="18" terrain="1,,,"/>
+  <tile id="19" terrain="4,4,4,"/>
+  <tile id="20" terrain="4,4,,4"/>
+  <tile id="21" terrain=",4,,"/>
+  <tile id="22" terrain="4,4,,"/>
+  <tile id="23" terrain="4,,,"/>
+  <tile id="24" terrain=",,,2"/>
+  <tile id="25" terrain=",,2,2"/>
+  <tile id="26" terrain=",,2,"/>
+  <tile id="27" terrain="4,,4,4"/>
+  <tile id="28" terrain=",4,4,4"/>
+  <tile id="29" terrain=",,,3"/>
+  <tile id="30" terrain=",,3,3"/>
+  <tile id="31" terrain=",,3,"/>
+  <tile id="32" terrain=",2,,2"/>
+  <tile id="33" terrain="2,2,2,2"/>
+  <tile id="34" terrain="2,,2,"/>
+  <tile id="35" terrain="2,2,2,"/>
+  <tile id="36" terrain="2,2,,2"/>
+  <tile id="37" terrain=",3,,3"/>
+  <tile id="38" terrain="3,3,3,3"/>
+  <tile id="39" terrain="3,,3,"/>
+  <tile id="40" terrain=",2,,"/>
+  <tile id="41" terrain="2,2,,"/>
+  <tile id="42" terrain="2,,,"/>
+  <tile id="43" terrain="2,,2,2"/>
+  <tile id="44" terrain=",2,2,2"/>
+  <tile id="45" terrain=",3,,"/>
+  <tile id="46" terrain="3,3,,"/>
+  <tile id="47" terrain="3,,,"/>
+  <tile id="54" terrain="3,3,3,"/>
+  <tile id="55" terrain="3,3,,3"/>
+  <tile id="62" terrain="3,,3,3"/>
+  <tile id="63" terrain=",3,3,3"/>
+ </tileset>
+ <layer name="块层 1" width="25" height="25">
+  <data encoding="base64" compression="zlib">
+   eJzFVDESgjAQjCiFggXYoxVaqam0k/+/yjjDzeysewFsLHYGcpu9u+SyMYQQ/4hVwjrz73FzPOQXCfuEevzmf86NMftmju0z/m4CqNEklIJTQQ7j1DP15+bhXrYQ2zh1qRjqbAX3QOeJ65+6WkI59s81W54GeJ4+nyGjgX1eHuapM8JYl3AEnEROzsMzF8UZofaQcAa8IA/Ot7qjAqD0WVvlwfvC+1Oz0mb0Hwk3wFP0o+6MZyVm9O+0v3fObQp2n54+esAVerE8xxng82Z9m4naybMUpo8zo7zhSvfkwWrBNaufPYHz2Ex6vmprVgv6LXr4Uk+0uirKWQB3id+qvvbOv+erPN/oicwpM3stxjrsJ+hVDXC6oN97J/jeTA/h20M4fgnf760X/F/n3Hvr6v1MzbbyLYyrXvj9eB6DPPYtjKsY4w3ERUVQ
+  </data>
+ </layer>
+</map>
