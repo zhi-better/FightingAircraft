@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Created with TexturePacker http://www.codeandweb.com/texturepacker-->
+<!-- $TexturePacker:SmartUpdate:c586e875736ea275f3f7b131e64e932d:b951b8b18af46dca4ee3a9e775e5b7e9:dff12e0befd40656960c973e0586f773$ -->
+<TextureAtlas imagePath="runway.png">
+    <SubTexture name="runway/body" x="2" y="139" width="780" height="135"/>
+    <SubTexture name="runway/ruins" x="2" y="2" width="780" height="135"/>
+</TextureAtlas>

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Created with TexturePacker http://www.codeandweb.com/texturepacker-->
+<!-- $TexturePacker:SmartUpdate:c38981f41431b205383ed4d1cfa9feba:85858d1fb9c61325d0f106cebb1a1d5d:5d352b0923f625be0ee1da0af78671bd$ -->
+<TextureAtlas imagePath="destroyer.png">
+    <SubTexture name="destroyer/body" x="2" y="2" width="698" height="90"/>
+    <SubTexture name="destroyer/ruins" x="2" y="94" width="693" height="87"/>
+</TextureAtlas>

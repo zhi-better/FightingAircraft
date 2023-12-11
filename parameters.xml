@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Created By Zhizhi, please do not change the following contents at will-->
+<TextureAtlas gamename="Fighting fighter.exe">
+	<SubTexture name="Ar234" lifevalue="1000" speed="3" mainweapon="1" secondweapon="1" attackpower="20" turnspeed="3" reloadtime="400" ammo="200"/>
+	<SubTexture name="B17" lifevalue="1000" speed="1.5" mainweapon="2" secondweapon="1" attackpower="50" turnspeed="2.5" reloadtime="400" ammo="200"/>
+	<SubTexture name="B24" lifevalue="1000" speed="2" mainweapon="1" secondweapon="1" attackpower="10" turnspeed="3" reloadtime="400" ammo="200"/>
+	<SubTexture name="B25" lifevalue="1000" speed="2" mainweapon="1" secondweapon="1" attackpower="10" turnspeed="3" reloadtime="400" ammo="200"/>
+	<SubTexture name="Ba349" lifevalue="1000" speed="5" mainweapon="1" secondweapon="1" attackpower="10" turnspeed="3.5" reloadtime="400" ammo="200"/>
+	<SubTexture name="Bf109" lifevalue="1000" speed="2" mainweapon="1" secondweapon="1" attackpower="10" turnspeed="2" reloadtime="400" ammo="200"/>
+	<SubTexture name="Bf110" lifevalue="500" speed="3.5" mainweapon="2" secondweapon="1" attackpower="5" turnspeed="4.5" reloadtime="400" ammo="200"/>
+	<SubTexture name="Bv138" lifevalue="1000" speed="2" mainweapon="1" secondweapon="1" attackpower="10" turnspeed="3" reloadtime="400" ammo="200"/>
+	<SubTexture name="C43" lifevalue="1000" speed="1.5" mainweapon="1" secondweapon="1" attackpower="100" turnspeed="1.5" reloadtime="400" ammo="200"/>
+	<SubTexture name="Cg4a" lifevalue="1000" speed="2" mainweapon="1" secondweapon="1" attackpower="10" turnspeed="3" reloadtime="400" ammo="200"/>
+	<SubTexture name="Do17" lifevalue="1000" speed="2" mainweapon="1" secondweapon="1" attackpower="10" turnspeed="3" reloadtime="400" ammo="200"/>
+	<SubTexture name="Do24" lifevalue="1000" speed="2" mainweapon="1" secondweapon="1" attackpower="10" turnspeed="3" reloadtime="400" ammo="200"/>
+	<SubTexture name="Do335" lifevalue="1000" speed="2" mainweapon="1" secondweapon="1" attackpower="10" turnspeed="3" reloadtime="400" ammo="200"/>
+	<SubTexture name="F3F" lifevalue="1000" speed="2" mainweapon="1" secondweapon="1" attackpower="10" turnspeed="3" reloadtime="400" ammo="200"/>
+	<SubTexture name="F4F" lifevalue="1000" speed="2" mainweapon="1" secondweapon="1" attackpower="10" turnspeed="3" reloadtime="400" ammo="200"/>
+	<SubTexture name="F4U" lifevalue="1000" speed="2" mainweapon="1" secondweapon="1" attackpower="10" turnspeed="3" reloadtime="400" ammo="200"/>
+	<SubTexture name="F80" lifevalue="1000" speed="2" mainweapon="1" secondweapon="1" attackpower="10" turnspeed="3" reloadtime="400" ammo="200"/>
+	<SubTexture name="fokd" lifevalue="1000" speed="2" mainweapon="1" secondweapon="1" attackpower="10" turnspeed="3" reloadtime="400" ammo="200"/>
+	<SubTexture name="Fw189" lifevalue="1000" speed="2" mainweapon="1" secondweapon="1" attackpower="10" turnspeed="3" reloadtime="400" ammo="200"/>
+	<SubTexture name="Fw190" lifevalue="1000" speed="2" mainweapon="1" secondweapon="1" attackpower="10" turnspeed="3" reloadtime="400" ammo="200"/>
+	<SubTexture name="He111" lifevalue="1000" speed="2" mainweapon="1" secondweapon="1" attackpower="10" turnspeed="3" reloadtime="400" ammo="200"/>
+	<SubTexture name="He115" lifevalue="1000" speed="2" mainweapon="1" secondweapon="1" attackpower="10" turnspeed="3" reloadtime="400" ammo="200"/>
+	<SubTexture name="He162" lifevalue="1000" speed="2" mainweapon="1" secondweapon="1" attackpower="10" turnspeed="3" reloadtime="400" ammo="200"/>
+	<SubTexture name="Ho229" lifevalue="1000" speed="2" mainweapon="1" secondweapon="1" attackpower="10" turnspeed="3" reloadtime="400" ammo="200"/>
+	<SubTexture name="Hs123" lifevalue="1000" speed="2" mainweapon="1" secondweapon="1" attackpower="10" turnspeed="3" reloadtime="400" ammo="200"/>
+	<SubTexture name="Ju52" lifevalue="1000" speed="2" mainweapon="1" secondweapon="1" attackpower="10" turnspeed="3" reloadtime="400" ammo="200"/>
+	<SubTexture name="Ju87" lifevalue="1000" speed="2" mainweapon="1" secondweapon="1" attackpower="10" turnspeed="3" reloadtime="400" ammo="200"/>
+	<SubTexture name="Ju88" lifevalue="1000" speed="2" mainweapon="1" secondweapon="1" attackpower="10" turnspeed="3" reloadtime="400" ammo="200"/>
+	<SubTexture name="Ju188" lifevalue="1000" speed="2" mainweapon="1" secondweapon="1" attackpower="10" turnspeed="3" reloadtime="400" ammo="200"/>
+	<SubTexture name="lippisch" lifevalue="1000" speed="2" mainweapon="1" secondweapon="1" attackpower="10" turnspeed="3" reloadtime="400" ammo="200"/>
+	<SubTexture name="Me163" lifevalue="1000" speed="2" mainweapon="1" secondweapon="1" attackpower="10" turnspeed="3" reloadtime="400" ammo="200"/>
+	<SubTexture name="Me262" lifevalue="1000" speed="2" mainweapon="1" secondweapon="1" attackpower="10" turnspeed="3" reloadtime="400" ammo="200"/>
+	<SubTexture name="P38" lifevalue="1000" speed="3.5" mainweapon="2" secondweapon="1" attackpower="20" turnspeed="3" reloadtime="400" ammo="200"/>
+	<SubTexture name="P39" lifevalue="1000" speed="2" mainweapon="1" secondweapon="1" attackpower="10" turnspeed="3" reloadtime="400" ammo="200"/>
+	<SubTexture name="P40" lifevalue="1000" speed="2" mainweapon="1" secondweapon="1" attackpower="10" turnspeed="3" reloadtime="400" ammo="200"/>
+	<SubTexture name="P47" lifevalue="1000" speed="2" mainweapon="1" secondweapon="1" attackpower="10" turnspeed="3" reloadtime="400" ammo="200"/>
+	<SubTexture name="P51" lifevalue="1000" speed="2" mainweapon="1" secondweapon="1" attackpower="10" turnspeed="3" reloadtime="400" ammo="200"/>
+	<SubTexture name="P61" lifevalue="1000" speed="2" mainweapon="1" secondweapon="1" attackpower="10" turnspeed="3" reloadtime="400" ammo="200"/>
+	<SubTexture name="SBD" lifevalue="1000" speed="2" mainweapon="1" secondweapon="1" attackpower="10" turnspeed="3" reloadtime="400" ammo="200"/>
+</TextureAtlas>
