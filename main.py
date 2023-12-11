@@ -10,6 +10,9 @@ import xml.etree.ElementTree as ET
 from PIL import Image
 import numpy as np
 
+from utils.cls_airplane import AirPlane
+
+
 def load_map(xml_file_path):
     # 读取XML文件
     tree = ET.parse(xml_file_path)
@@ -58,6 +61,37 @@ def get_rect_from_tile_id(tile_id, tile_width, tile_height):
 
     return tile_rect
 
+
+def load_plane_xml_data(file_path):
+    # 解析XML文件
+    tree = ET.parse(file_path)
+    root = tree.getroot()
+
+    # 获取图片路径
+    image_path = root.attrib.get('imagePath')
+
+    # 初始化滚转和俯仰的映射字典
+    roll_mapping = {}
+    pitch_mapping = {}
+
+    # 遍历SubTexture元素
+    for subtexture in root.findall('SubTexture'):
+        name = subtexture.attrib.get('name')
+        x = int(subtexture.attrib.get('x'))
+        y = int(subtexture.attrib.get('y'))
+        width = int(subtexture.attrib.get('width'))
+        height = int(subtexture.attrib.get('height'))
+
+        # 判断是滚转还是俯仰
+        parts = name.split('/')
+        if parts[1] == 'roll':
+            roll_mapping[int(parts[2][4:])] = {'x': x, 'y': y, 'width': width, 'height': height}
+        elif parts[1] == 'pitch':
+            pitch_mapping[int(parts[2][4:])] = {'x': x, 'y': y, 'width': width, 'height': height}
+
+    # 返回图片路径和映射字典
+    return 'objects/'+image_path, roll_mapping, pitch_mapping
+
 def run_game():
     # # 首先加载都有哪些地图
     # num_xml_file = 0
@@ -80,18 +114,30 @@ def run_game():
     color = (0, 0, 0)  # 设置颜色
 
     # 加载飞机
+    image_path, roll_mapping, pitch_mapping = load_plane_xml_data('objects/Ar234.xml')
+    plane_sprite = pygame.image.load(image_path)
+    plane = AirPlane()
+    plane.velocity = 5
+    rect_dic = roll_mapping[0]
+    plane_rect = pygame.Rect(rect_dic['x'], rect_dic['y'], rect_dic['width'], rect_dic['height'])
+    plane_sprite_subsurface = plane_sprite.subsurface(plane_rect)
 
-
-    # tile_ids, image_source, width, height, tile_width, tile_height = load_map(xml_file_path="map/map0.xml")
-    # # 加载游戏图像资源
-    # template_image = pygame.image.load(image_source)
+    tile_ids, image_source, width, height, tile_width, tile_height = load_map(xml_file_path="map/map0.xml")
+    # 加载游戏图像资源
+    template_image = pygame.image.load(image_source)
+    start_point = plane.get_position()
     # start_point = np.array([0 * width * tile_width, 0 * height * tile_height])
-    # x_load_block_count = int(np.ceil(game_window_size[0] * 0.5 / tile_width)) + 1
-    # y_load_block_count = int(np.ceil(game_window_size[1] * 0.5 / tile_height)) + 1
-    # step = 5
+    x_load_block_count = int(np.ceil(game_window_size[0] * 0.5 / tile_width)) + 1
+    y_load_block_count = int(np.ceil(game_window_size[1] * 0.5 / tile_height)) + 1
+    step = 5
 
     # 初始化按键状态字典
-    key_states = {pygame.K_UP: False, pygame.K_DOWN: False, pygame.K_LEFT: False, pygame.K_RIGHT: False}
+    key_states = {pygame.K_UP: False,
+                  pygame.K_DOWN: False,
+                  pygame.K_LEFT: False,
+                  pygame.K_RIGHT: False,
+                  pygame.K_q: False,
+                  pygame.K_e: False}
 
     while True:
         clock.tick(30)
@@ -108,34 +154,44 @@ def run_game():
                 if event.key in key_states:
                     key_states[event.key] = False
 
-        # # print(pygame.key.name(bools.index(1)))
-        # if key_states[pygame.K_UP]:
-        #     start_point[1] -= step
-        # elif key_states[pygame.K_DOWN]:
-        #     start_point[1] += step
-        # elif key_states[pygame.K_LEFT]:
-        #     start_point[0] -= step
-        # elif key_states[pygame.K_RIGHT]:
-        #     start_point[0] += step
-        #
-        # # 清屏
-        # screen.fill((255, 255, 255))
-        # start_point[0] = start_point[0] % (width * tile_width)
-        # start_point[1] = start_point[1] % (height * tile_height)
-        # x_diff = start_point[0] % tile_width
-        # y_diff = start_point[1] % tile_height
-        # # 开始加载图像并绘图
-        # x_tile_block = int(start_point[0] / tile_width)
-        # y_tile_block = int(start_point[1] / tile_height)
-        # for i in range(x_tile_block-x_load_block_count, x_tile_block+x_load_block_count):
-        #     for j in range(y_tile_block-y_load_block_count, y_tile_block+y_load_block_count):
-        #         # 首先判断出该位置对应的 id 是多少
-        #         id = tile_ids[(j % height) * width + (i % width)]
-        #         tile_rect = get_rect_from_tile_id(id, tile_width=tile_width, tile_height=tile_height)
-        #         screen.blit(template_image,
-        #             (0.5*game_window_size[0]+(i-x_tile_block)*tile_width - x_diff,
-        #              0.5*game_window_size[1]+(j-y_tile_block)*tile_height - y_diff), tile_rect)
+        # print(pygame.key.name(bools.index(1)))
+        if key_states[pygame.K_UP]:
+            start_point[1] -= step
+        elif key_states[pygame.K_DOWN]:
+            start_point[1] += step
+        elif key_states[pygame.K_LEFT]:
+            # start_point[0] -= step
+            plane.turn_left()
+        elif key_states[pygame.K_RIGHT]:
+            # start_point[0] += step
+            plane.turn_right()
 
+        # 清屏
+        screen.fill((255, 255, 255))
+        plane.move()
+        start_point = plane.get_position()
+        start_point[0] = start_point[0] % (width * tile_width)
+        start_point[1] = start_point[1] % (height * tile_height)
+        x_diff = start_point[0] % tile_width
+        y_diff = start_point[1] % tile_height
+        # 开始加载图像并绘图
+        x_tile_block = int(start_point[0] / tile_width)
+        y_tile_block = int(start_point[1] / tile_height)
+        for i in range(x_tile_block-x_load_block_count, x_tile_block+x_load_block_count):
+            for j in range(y_tile_block-y_load_block_count, y_tile_block+y_load_block_count):
+                # 首先判断出该位置对应的 id 是多少
+                id = tile_ids[(j % height) * width + (i % width)]
+                tile_rect = get_rect_from_tile_id(id, tile_width=tile_width, tile_height=tile_height)
+                screen.blit(template_image,
+                    (0.5*game_window_size[0]+(i-x_tile_block)*tile_width - x_diff,
+                     0.5*game_window_size[1]+(j-y_tile_block)*tile_height - y_diff), tile_rect)
+
+        rotated_plane_sprite = pygame.transform.rotate(plane_sprite_subsurface, plane.get_angle())
+
+        # 获取旋转后的矩形
+        plane_rect = rotated_plane_sprite.get_rect(
+            center=(0.5 * game_window_size[0], 0.5 * game_window_size[1]))
+        screen.blit(rotated_plane_sprite, plane_rect)
         pygame.display.flip()  # 更新全部显示
         # print('refresh all')
 
