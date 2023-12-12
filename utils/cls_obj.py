@@ -28,14 +28,14 @@ class DynamicObject(StaticObject):
     def __init__(self):
         super().__init__()
         self.direction_vector = np.array([0, 1])
-        self.speed = 0
+        self.speed = 0.0
 
     def set_speed(self, speed):
         self.speed = speed
 
     def move(self):
         self.set_position(
-            self.get_position() + self.speed * np.multiply(self.direction_vector, np.array([1, -1])))
+            self.get_position() + int(self.speed) * np.multiply(self.direction_vector, np.array([1, -1])).astype(int))
 
     def set_direction_vector(self, vector_2d):
         self.direction_vector = vector_2d

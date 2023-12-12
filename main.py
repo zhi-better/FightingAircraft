@@ -131,6 +131,9 @@ def run_game():
     y_load_block_count = int(np.ceil(game_window_size[1] * 0.5 / tile_height)) + 1
     step = 5
 
+    # 定义字体和字号
+    font = pygame.font.Font(None, 36)
+
     # 初始化按键状态字典
     key_states = {pygame.K_UP: False,
                   pygame.K_DOWN: False,
@@ -167,6 +170,12 @@ def run_game():
         elif key_states[pygame.K_RIGHT]:
             # start_point[0] += step
             plane.turn_right()
+        elif key_states[pygame.K_q]:
+            # start_point[0] += step
+            plane.sharply_turn_left()
+        elif key_states[pygame.K_e]:
+            # start_point[0] += step
+            plane.sharply_turn_right()
 
         # 清屏
         screen.fill((255, 255, 255))
@@ -189,6 +198,13 @@ def run_game():
                      0.5*game_window_size[1]+(j-y_tile_block)*tile_height - y_diff), tile_rect)
 
         rotated_plane_sprite = plane.get_sprite()
+
+        # 渲染文本
+        text = font.render('{:.2f}'.format(plane.get_engine_temperature()), True, (0, 0, 0))
+        # 获取文本矩形
+        text_rect = text.get_rect()
+        # 将文本绘制到屏幕上
+        screen.blit(text, (10, 10))
 
         # 获取旋转后的矩形
         plane_rect = rotated_plane_sprite.get_rect(

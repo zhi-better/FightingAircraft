@@ -10,14 +10,27 @@ class AirPlane(DynamicObject):
         super().__init__()
         self.health_points = 1000
         self.turning_speed = 0.8
-        self.real_speed = self.speed
+        self.real_speed = 0
+        self.max_speed = 0
+        self.min_speed = 3
+        self._speed_modulation_factor = 1.0
         self.real_turning_speed = self.turning_speed
-        self.engine_temperature = 0
+        self._engine_temperature = 0
+        self.engine_heat_rate = 0
         self.roll_mapping = {}
         self.pitch_mapping = {}
         self.attitude = np.zeros((2,))      # 表示飞行姿态
         self.target_attitude = np.zeros((2,))
         self.sprite_attitude = None
+
+    def get_engine_temperature(self):
+        return self._engine_temperature
+
+    def _linear_interpolation(self, start, end, t=0.7, threshold=0.5):
+        res = (1 - t) * start + t * end
+        if np.abs(res - end) < threshold:
+            res = end
+        return res
 
     @overrides
     def get_sprite(self):
@@ -39,20 +52,50 @@ class AirPlane(DynamicObject):
         return angle_deg
 
     def sppe_up(self):
-        self.real_speed = self.speed * 1.5
+        self._speed_modulation_factor = 1.1
+        self.engine_heat_rate += 0.2
 
     def slow_down(self):
-        self.real_speed = self.speed * 0.7
+        self._speed_modulation_factor = 0.7
 
     def set_speed(self, speed):
         self.speed = speed
         self.real_speed = speed
+        self.max_speed = self.speed * 2
+        self.min_speed = 3
 
     @overrides
     def move(self):
+        # 实际的速度永远和增益的比例有关
+        if self._speed_modulation_factor > 1:
+            # self._engine_temperature += self._speed_modulation_factor * 0.2
+            if self._engine_temperature >= 100:
+                self._engine_temperature = 100
+                # print('engine overheating. ')
+                # 速度插值，为了恢复常规的运行速度
+                self.real_speed = self._linear_interpolation(self.real_speed, self.speed)
+            else:
+                self.real_speed = np.minimum(self.real_speed * self._speed_modulation_factor, self.max_speed)
+        elif self._speed_modulation_factor < 1:
+            self.real_speed = np.maximum(self.real_speed * self._speed_modulation_factor, self.min_speed)
+        else:
+            # 速度插值，为了恢复常规的运行速度
+            self.real_speed = self._linear_interpolation(self.real_speed, self.speed)
+
+        # 如果没有升温，那么就设置此时降温
+        if self.engine_heat_rate == 0:
+            self.engine_heat_rate = -0.3
+        self._engine_temperature = np.maximum(0, self._engine_temperature + self.engine_heat_rate)
+
+        print('\rthe real speed is: {:.2f}, engine temperature is: {}'.format(
+            self.real_speed, self._engine_temperature), end='')
+
         self.set_position(
-            self.get_position() + self.real_speed * np.multiply(self.direction_vector, np.array([1, -1])))
-        self.real_speed = self.speed
+            self.get_position() + int(self.real_speed) * np.multiply(self.direction_vector, np.array([1, -1])))
+        # 根据速度自动调整目前的速度向着
+        self._speed_modulation_factor = 1   # 增益复位，防止影响下一帧运行速度
+        self.engine_heat_rate = 0
+
 
     def take_damage(self, damage):
         print(f'take_damage: {damage}')
@@ -74,12 +117,16 @@ class AirPlane(DynamicObject):
         self.real_turning_speed = self.turning_speed
 
     def sharply_turn_left(self):
-        self.real_turning_speed = self.turning_speed * 1.5
+        if self._engine_temperature < 100:
+            self.real_turning_speed = self.turning_speed * 2
+            self.engine_heat_rate += 0.2
         self.turn_left()
 
 
     def sharply_turn_right(self):
-        self.real_turning_speed = self.turning_speed * 1.5
+        if self._engine_temperature < 100:
+            self.real_turning_speed = self.turning_speed * 2
+            self.engine_heat_rate += 0.2
         self.turn_right()
 
     @abstractmethod
