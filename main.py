@@ -117,10 +117,10 @@ def run_game():
     image_path, roll_mapping, pitch_mapping = load_plane_xml_data('objects/Ar234.xml')
     plane_sprite = pygame.image.load(image_path)
     plane = AirPlane()
-    plane.velocity = 5
-    rect_dic = roll_mapping[0]
-    plane_rect = pygame.Rect(rect_dic['x'], rect_dic['y'], rect_dic['width'], rect_dic['height'])
-    plane_sprite_subsurface = plane_sprite.subsurface(plane_rect)
+    plane.set_speed(5)
+    plane.load_sprite('objects/Ar234.png')
+    plane.roll_mapping = roll_mapping
+    plane.pitch_mapping = pitch_mapping
 
     tile_ids, image_source, width, height, tile_width, tile_height = load_map(xml_file_path="map/map0.xml")
     # 加载游戏图像资源
@@ -156,10 +156,12 @@ def run_game():
 
         # print(pygame.key.name(bools.index(1)))
         if key_states[pygame.K_UP]:
-            start_point[1] -= step
+            # start_point[1] -= step
+            plane.sppe_up()
         elif key_states[pygame.K_DOWN]:
-            start_point[1] += step
-        elif key_states[pygame.K_LEFT]:
+            # start_point[1] += step
+            plane.slow_down()
+        if key_states[pygame.K_LEFT]:
             # start_point[0] -= step
             plane.turn_left()
         elif key_states[pygame.K_RIGHT]:
@@ -186,12 +188,13 @@ def run_game():
                     (0.5*game_window_size[0]+(i-x_tile_block)*tile_width - x_diff,
                      0.5*game_window_size[1]+(j-y_tile_block)*tile_height - y_diff), tile_rect)
 
-        rotated_plane_sprite = pygame.transform.rotate(plane_sprite_subsurface, plane.get_angle())
+        rotated_plane_sprite = plane.get_sprite()
 
         # 获取旋转后的矩形
         plane_rect = rotated_plane_sprite.get_rect(
             center=(0.5 * game_window_size[0], 0.5 * game_window_size[1]))
         screen.blit(rotated_plane_sprite, plane_rect)
+
         pygame.display.flip()  # 更新全部显示
         # print('refresh all')
 
