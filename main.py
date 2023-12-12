@@ -142,6 +142,8 @@ def run_game():
                   pygame.K_q: False,
                   pygame.K_e: False}
 
+
+
     while True:
         clock.tick(30)
         for event in pygame.event.get():  # 遍历所有事件
@@ -200,7 +202,8 @@ def run_game():
         rotated_plane_sprite = plane.get_sprite()
 
         # 渲染文本
-        text = font.render('{:.2f}'.format(plane.get_engine_temperature()), True, (0, 0, 0))
+        text = font.render('Engine temperature: {:.2f}, Speed: {:.2f}'.format(
+            plane.get_engine_temperature(),plane.real_speed), True, (0, 0, 0))
         # 获取文本矩形
         text_rect = text.get_rect()
         # 将文本绘制到屏幕上
