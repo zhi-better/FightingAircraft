@@ -4,7 +4,7 @@ import struct
 import sys
 import zlib
 
-import pygame
+import pygame as pg
 import time
 import xml.etree.ElementTree as ET
 from PIL import Image
@@ -27,11 +27,11 @@ def load_map(xml_file_path):
     # scaled_tilewidth = int(tilewidth * scale_factor)
     # scaled_tileheight = int(tileheight * scale_factor)
 
-    # # 创建Pygame窗口
+    # # 创建pg窗口
     # initial_window_size = (width * scaled_tilewidth, height * scaled_tileheight)
-    # pygame.init()
-    # screen = pygame.display.set_mode(initial_window_size)
-    # pygame.display.set_caption("Tiled Map")
+    # pg.init()
+    # screen = pg.display.set_mode(initial_window_size)
+    # pg.display.set_caption("Tiled Map")
 
     # 解析图层数据
     data_element = root.find(".//layer/data")
@@ -56,7 +56,7 @@ def get_rect_from_tile_id(tile_id, tile_width, tile_height):
             rec_y = tile_id // 8 - 1
         else:
             rec_y = tile_id // 8
-        tile_rect = pygame.Rect(rec_x * tile_width, rec_y * tile_height,
+        tile_rect = pg.Rect(rec_x * tile_width, rec_y * tile_height,
                                 tile_width, tile_height)
 
     return tile_rect
@@ -84,10 +84,10 @@ def load_plane_xml_data(file_path):
 
         # 判断是滚转还是俯仰
         parts = name.split('/')
-        if parts[1] == 'roll':
+        if parts[2].find('roll') != -1:
             roll_mapping[int(parts[2][4:])] = {'x': x, 'y': y, 'width': width, 'height': height}
-        elif parts[1] == 'pitch':
-            pitch_mapping[int(parts[2][4:])] = {'x': x, 'y': y, 'width': width, 'height': height}
+        elif parts[2].find('pitch') != -1:
+            pitch_mapping[int(parts[2][5:])] = {'x': x, 'y': y, 'width': width, 'height': height}
 
     # 返回图片路径和映射字典
     return 'objects/'+image_path, roll_mapping, pitch_mapping
@@ -106,25 +106,25 @@ def run_game():
     # print(select_map_name)
     # =========================================================================
 
-    pygame.init()  # 初始化pygame
+    pg.init()  # 初始化pg
     game_window_size = 1080, 720  # 设置窗口大小
-    screen = pygame.display.set_mode(game_window_size)  # 显示窗口
-    pygame.display.set_caption("FightingAircraft")
-    clock = pygame.time.Clock()
+    screen = pg.display.set_mode(game_window_size)  # 显示窗口
+    pg.display.set_caption("FightingAircraft")
+    clock = pg.time.Clock()
     color = (0, 0, 0)  # 设置颜色
 
     # 加载飞机
-    image_path, roll_mapping, pitch_mapping = load_plane_xml_data('objects/Ar234.xml')
-    plane_sprite = pygame.image.load(image_path)
+    image_path, roll_mapping, pitch_mapping = load_plane_xml_data('objects/Bf110.xml')
+    plane_sprite = pg.image.load(image_path)
     plane = AirPlane()
     plane.set_speed(5)
-    plane.load_sprite('objects/Ar234.png')
+    plane.load_sprite('objects/Bf110.png')
     plane.roll_mapping = roll_mapping
     plane.pitch_mapping = pitch_mapping
 
     tile_ids, image_source, width, height, tile_width, tile_height = load_map(xml_file_path="map/map0.xml")
     # 加载游戏图像资源
-    template_image = pygame.image.load(image_source)
+    template_image = pg.image.load(image_source)
     start_point = plane.get_position()
     # start_point = np.array([0 * width * tile_width, 0 * height * tile_height])
     x_load_block_count = int(np.ceil(game_window_size[0] * 0.5 / tile_width)) + 1
@@ -132,52 +132,60 @@ def run_game():
     step = 5
 
     # 定义字体和字号
-    font = pygame.font.Font(None, 36)
+    font = pg.font.Font(None, 36)
 
     # 初始化按键状态字典
-    key_states = {pygame.K_UP: False,
-                  pygame.K_DOWN: False,
-                  pygame.K_LEFT: False,
-                  pygame.K_RIGHT: False,
-                  pygame.K_q: False,
-                  pygame.K_e: False}
+    key_states = {pg.K_UP: False,
+                  pg.K_DOWN: False,
+                  pg.K_LEFT: False,
+                  pg.K_RIGHT: False,
+                  pg.K_q: False,
+                  pg.K_e: False,
+                  pg.K_SPACE: False,
+                  pg.K_LSHIFT: False}
 
 
 
     while True:
         clock.tick(30)
-        for event in pygame.event.get():  # 遍历所有事件
-            if event.type == pygame.QUIT:  # 如果单击关闭窗口，则退出
-                pygame.quit()  # 退出pygame
+        for event in pg.event.get():  # 遍历所有事件
+            if event.type == pg.QUIT:  # 如果单击关闭窗口，则退出
+                pg.quit()  # 退出pg
                 sys.exit(0)
 
             # 处理键盘按下和释放事件
-            if event.type == pygame.KEYDOWN:
+            if event.type == pg.KEYDOWN:
                 if event.key in key_states:
                     key_states[event.key] = True
-            elif event.type == pygame.KEYUP:
+            elif event.type == pg.KEYUP:
                 if event.key in key_states:
                     key_states[event.key] = False
 
-        # print(pygame.key.name(bools.index(1)))
-        if key_states[pygame.K_UP]:
+        # print(pg.key.name(bools.index(1)))
+        if key_states[pg.K_UP]:
             # start_point[1] -= step
             plane.sppe_up()
-        elif key_states[pygame.K_DOWN]:
+        elif key_states[pg.K_DOWN]:
             # start_point[1] += step
             plane.slow_down()
-        if key_states[pygame.K_LEFT]:
+        if key_states[pg.K_LEFT]:
             # start_point[0] -= step
             plane.turn_left()
-        elif key_states[pygame.K_RIGHT]:
+        elif key_states[pg.K_RIGHT]:
             # start_point[0] += step
             plane.turn_right()
-        elif key_states[pygame.K_q]:
+        elif key_states[pg.K_q]:
             # start_point[0] += step
             plane.sharply_turn_left()
-        elif key_states[pygame.K_e]:
+        elif key_states[pg.K_e]:
             # start_point[0] += step
             plane.sharply_turn_right()
+        elif key_states[pg.K_SPACE]:
+            # start_point[0] += step
+            plane.pitch()
+        elif key_states[pg.K_LSHIFT]:
+            # start_point[0] += step
+            plane.roll()
 
         # 清屏
         screen.fill((255, 255, 255))
@@ -203,7 +211,7 @@ def run_game():
 
         # 渲染文本
         text = font.render('Engine temperature: {:.2f}, Speed: {:.2f}'.format(
-            plane.get_engine_temperature(),plane.real_speed), True, (0, 0, 0))
+            plane.get_engine_temperature(),plane.velocity), True, (0, 0, 0))
         # 获取文本矩形
         text_rect = text.get_rect()
         # 将文本绘制到屏幕上
@@ -214,7 +222,7 @@ def run_game():
             center=(0.5 * game_window_size[0], 0.5 * game_window_size[1]))
         screen.blit(rotated_plane_sprite, plane_rect)
 
-        pygame.display.flip()  # 更新全部显示
+        pg.display.flip()  # 更新全部显示
         # print('refresh all')
 
 
