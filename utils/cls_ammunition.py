@@ -6,6 +6,8 @@ class Ammunition(DynamicObject):
         super().__init__()
         self.damage = 0
 
+    def explode(self):
+        print('explode')
 
 
 

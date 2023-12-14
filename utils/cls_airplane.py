@@ -3,7 +3,7 @@ from enum import Enum, IntFlag
 import numpy as np
 import pygame
 from overrides import overrides
-
+from utils.cls_ammunition import *
 from utils.cls_obj import DynamicObject
 from abc import ABCMeta, abstractmethod
 
@@ -19,6 +19,10 @@ class FlyState(IntFlag):
     TurnLeft = 0b00000001
     TurnRight = 0b00000010
 
+class WeaponType(Enum):
+    Weapon_None = 0
+    MG_762_4x = 1
+    MG_762_2x = 2
 
 class AirPlane(DynamicObject):
     def __init__(self):
@@ -41,8 +45,8 @@ class AirPlane(DynamicObject):
         self.pitch_attitude = 0.0
         self._pitch_modulation_factor = 0
         self.target_attitude = np.zeros((2,))
-        self.sprite_attitude = None
         self.fly_state = FlyState.Norm
+        self.ammunition_list = []
 
     def reset_roll_attitude(self):
         if self.roll_attitude == 0:
@@ -98,9 +102,9 @@ class AirPlane(DynamicObject):
             rect_dic = self.pitch_mapping[int(0)]
         plane_rect = pygame.Rect(rect_dic['x'], rect_dic['y'], rect_dic['width'], rect_dic['height'])
         plane_sprite_subsurface = self.sprite.subsurface(plane_rect)
-        self.sprite_attitude = pygame.transform.rotate(plane_sprite_subsurface, self.get_angle())
+        # self.sprite_attitude = pygame.transform.rotate(plane_sprite_subsurface, self.get_angle())
 
-        return self.sprite_attitude
+        return plane_sprite_subsurface
 
     def get_angle(self):
         angle_rad = np.arctan2(self.direction_vector[1], self.direction_vector[0])
@@ -216,7 +220,8 @@ class AirPlane(DynamicObject):
                         self.reset_roll_attitude()
                     self.angular_velocity = self.angular_speed * -2
             else:
-                self.reset_roll_attitude()
+                if self._roll_modulation_factor == 0:
+                    self.reset_roll_attitude()
 
             # 普通转弯
             if self.fly_state & FlyState.TurnLeft:
@@ -273,6 +278,8 @@ class AirPlane(DynamicObject):
         self.angular_velocity = 0
         self.fly_state = FlyState.Norm
 
+
+
     def take_damage(self, damage):
         print(f'take_damage: {damage}')
 
@@ -321,8 +328,21 @@ class AirPlane(DynamicObject):
 class FighterJet(AirPlane):
     def __init__(self):
         super().__init__()
+        self.primary_weapon_type = WeaponType.Weapon_None
+        self.secondary_weapon_type = WeaponType.Weapon_None
+        self.reload_counter = 0
+        self.reload_time = 10
 
     def primary_weapon_attack(self):
+        # 首先根据创建的武器类型在对应位置创建对应的子弹
+        if self.reload_counter < self.reload_time:
+            self.reload_counter += 1
+        else:
+            self.reload_counter = 0
+            new_ammunition = Ammunition()
+            new_ammunition.set_position(self.get_position())
+            new_ammunition.set_direction_vector(self.direction_vector)
+
         print('primary_weapon_attack')
 
     def secondary_weapon_attack(self):
