@@ -21,6 +21,7 @@ class FightingAircraftGame:
         self.clock = pg.time.Clock()
         self.airplane_info_map = {}
         self.maps_map = {}
+        self.explode_map = {}
         self.map = Map()
         self.player_plane = None
         self.key_states = {pg.K_UP: False,
@@ -30,7 +31,9 @@ class FightingAircraftGame:
                            pg.K_q: False,
                            pg.K_e: False,
                            pg.K_SPACE: False,
-                           pg.K_LSHIFT: False}
+                           pg.K_LSHIFT: False,
+                           pg.K_j: False,
+                           pg.K_k: False}
 
     def input_manager(self):
         # print(pg.key.name(bools.index(1)))
@@ -58,6 +61,12 @@ class FightingAircraftGame:
         elif self.key_states[pg.K_LSHIFT]:
             # start_point[0] += step
             self.player_plane.roll()
+        elif self.key_states[pg.K_j]:
+            # start_point[0] += step
+            self.player_plane.primary_weapon_attack()
+        elif self.key_states[pg.K_k]:
+            # start_point[0] += step
+            self.player_plane.secondary_weapon_attack()
 
     def load_all_plane_parameters(self):
         # 解析XML文件
@@ -90,6 +99,31 @@ class FightingAircraftGame:
 
         return self.airplane_info_map
 
+    def load_all_explodes(self):
+        # 解析XML文件
+        tree = ET.parse('explode.xml')
+        root = tree.getroot()
+
+        # 遍历子元素
+        name = 'cloud1'
+        explode_list = []
+        for sub_texture in root.findall(".//SubTexture"):
+            parts = sub_texture.get("name").split('/')
+            type_name = parts[0]
+            if name != type_name:
+                self.explode_map[name] = explode_list.copy()
+                explode_list.clear()
+                name = type_name
+
+            explode_list.append({'x': int(sub_texture.get("x")),
+                                 'y': int(sub_texture.get('y')),
+                                 'width': int(sub_texture.get('width')),
+                                 'height': int(sub_texture.get('height'))})
+        # 最后一个补上
+        self.explode_map[name] = explode_list
+
+        return self.explode_map
+
     def load_all_maps(self):
         # 首先加载都有哪些地图
         num_xml_file = 0
@@ -101,7 +135,7 @@ class FightingAircraftGame:
     def load_plane(self, plane_name):
         param = self.airplane_info_map[plane_name]
 
-        self.player_plane = AirPlane()
+        self.player_plane = FighterJet()
         self.player_plane.set_speed(param['speed'])
         self.player_plane.angular_speed = param['turnspeed']
         self.player_plane.health_points = param['lifevalue']
@@ -152,9 +186,13 @@ class FightingAircraftGame:
         # 初始化
         self.load_all_maps()
         self.load_all_plane_parameters()
+        self.load_all_explodes()
+        self.ammunition_sprite = pg.image.load('explode.png')
 
         # 加载飞机
         self.load_plane('Bf109')
+        self.player_plane.ammunition_sprite = self.ammunition_sprite
+        self.player_plane.primary_weapon_animation_list = self.explode_map['fire1']
         self.map.window_size = self.game_window_size
         self.map.load_map_xml(self.maps_map[0])
 
@@ -185,6 +223,10 @@ class FightingAircraftGame:
             self.map.render_object(
                 self.player_plane.get_sprite(), self.player_plane.get_position(),
                 angle=self.player_plane.get_angle(), screen=screen)
+            for ammu in self.player_plane.ammunition_list:
+                self.map.render_object(
+                    ammu.get_sprite(), self.player_plane.get_position(),
+                angle=self.player_plane.get_angle(), screen=screen)
 
             # 渲染文本
             text = font.render('Engine temperature: {:.2f}, Speed: {:.2f}'.format(
@@ -196,66 +238,6 @@ class FightingAircraftGame:
 
             pg.display.flip()  # 更新全部显示
 
-
-# time_start = time.time()
-# game = FightingAircraftGame()
-# # 初始化
-# game.load_all_maps()
-# game.load_all_plane_parameters()
-# # 加载飞机
-# game.load_plane('Bf109')
-# game.map.window_size = game.game_window_size
-# game.map.load_map_xml(game.maps_map[0])
-#
-# pg.init()
-# screen = pg.display.set_mode(game.game_window_size)
-# print('load time cost: {}'.format(time.time() - time_start))
-#
-#
-#
-# async def main():
-#
-#     while True:
-#         time_start = time.time()
-#         # 在此处绘制屏幕、处理事件、控制帧率……
-#         game.clock.tick(30)
-#
-#         # 定义字体和字号
-#         font = pg.font.Font(None, 36)
-#
-#         for event in pg.event.get():  # 遍历所有事件
-#             if event.type == pg.QUIT:  # 如果单击关闭窗口，则退出
-#                 pg.quit()  # 退出pg
-#                 sys.exit(0)
-#
-#             # 处理键盘按下和释放事件
-#             if event.type == pg.KEYDOWN:
-#                 if event.key in game.key_states:
-#                     game.key_states[event.key] = True
-#             elif event.type == pg.KEYUP:
-#                 if event.key in game.key_states:
-#                     game.key_states[event.key] = False
-#             game.input_manager()
-#
-#             # 清屏
-#             screen.fill((255, 255, 255))
-#             game.player_plane.move()
-#             game.map.render_map(game.player_plane.get_position(), screen=screen)
-#             game.map.render_object(
-#                 game.player_plane.get_sprite(), game.player_plane.get_position(),
-#                 angle=game.player_plane.get_angle(), screen=screen)
-#
-#             # 渲染文本
-#             text = font.render('Engine temperature: {:.2f}, Speed: {:.2f}'.format(
-#                 game.player_plane.get_engine_temperature(), game.player_plane.velocity), True, (0, 0, 0))
-#             # 获取文本矩形
-#             text_rect = text.get_rect()
-#             # 将文本绘制到屏幕上
-#             screen.blit(text, (10, 10))
-#
-#         pg.display.flip()  # 或者：pg.display.update()
-#         # time_start = time.time()
-#         print('\rtime cost: {}'.format(time.time() - time_start), end='')
 
 if __name__ == '__main__':
     game = FightingAircraftGame()

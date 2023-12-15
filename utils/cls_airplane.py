@@ -19,14 +19,17 @@ class FlyState(IntFlag):
     TurnLeft = 0b00000001
     TurnRight = 0b00000010
 
+
 class WeaponType(Enum):
     Weapon_None = 0
     MG_762_4x = 1
     MG_762_2x = 2
 
+
 class AirPlane(DynamicObject):
     def __init__(self):
         super().__init__()
+        self.primary_weapon_animation_list = []
         self.health_points = 1000
         self.angular_speed = 0.8
         self.velocity = 0
@@ -47,6 +50,7 @@ class AirPlane(DynamicObject):
         self.target_attitude = np.zeros((2,))
         self.fly_state = FlyState.Norm
         self.ammunition_list = []
+        self.ammunition_sprite = None
 
     def reset_roll_attitude(self):
         if self.roll_attitude == 0:
@@ -130,7 +134,6 @@ class AirPlane(DynamicObject):
 
     @overrides
     def move(self):
-
         # 首先调整控制飞机姿态
         # ---------------------------------------------
         # 横滚
@@ -278,43 +281,24 @@ class AirPlane(DynamicObject):
         self.angular_velocity = 0
         self.fly_state = FlyState.Norm
 
-
+        # 所有发射的弹药也得 move
+        for ammu in self.ammunition_list:
+            ammu.move()
 
     def take_damage(self, damage):
         print(f'take_damage: {damage}')
 
     def turn_left(self):
         self.fly_state = self.fly_state | FlyState.TurnLeft
-        # # 逆时针旋转方向向量
-        # rotation_matrix = np.array([[np.cos(np.radians(self.real_turning_speed)), -np.sin(np.radians(self.real_turning_speed))],
-        #                             [np.sin(np.radians(self.real_turning_speed)), np.cos(np.radians(self.real_turning_speed))]])
-        # self.direction_vector = np.dot(rotation_matrix, self.direction_vector)
-        #
-        # self.real_turning_speed = self.turning_speed
 
     def turn_right(self):
         self.fly_state = self.fly_state | FlyState.TurnRight
-        # # 顺时针旋转方向向量
-        # rotation_matrix = np.array([[np.cos(np.radians(-self.real_turning_speed)), -np.sin(np.radians(-self.real_turning_speed))],
-        #                             [np.sin(np.radians(-self.real_turning_speed)), np.cos(np.radians(-self.real_turning_speed))]])
-        # self.direction_vector = np.dot(rotation_matrix, self.direction_vector)
-        #
-        # self.real_turning_speed = self.turning_speed
 
     def sharply_turn_left(self):
         self.fly_state = self.fly_state | FlyState.SharpTurnLeft
-        # if self._engine_temperature < 100:
-        #     self.real_turning_speed = self.turning_speed * 2
-        #     self.engine_heat_rate += 0.2
-        # self.turn_left()
-
 
     def sharply_turn_right(self):
         self.fly_state = self.fly_state | FlyState.SharpTurnRight
-        # if self._engine_temperature < 100:
-        #     self.real_turning_speed = self.turning_speed * 2
-        #     self.engine_heat_rate += 0.2
-        # self.turn_right()
 
     @abstractmethod
     def primary_weapon_attack(self):
@@ -331,7 +315,7 @@ class FighterJet(AirPlane):
         self.primary_weapon_type = WeaponType.Weapon_None
         self.secondary_weapon_type = WeaponType.Weapon_None
         self.reload_counter = 0
-        self.reload_time = 10
+        self.reload_time = 1
 
     def primary_weapon_attack(self):
         # 首先根据创建的武器类型在对应位置创建对应的子弹
@@ -340,10 +324,12 @@ class FighterJet(AirPlane):
         else:
             self.reload_counter = 0
             new_ammunition = Ammunition()
+            new_ammunition.sprite = self.ammunition_sprite
+            new_ammunition.animation_list = self.primary_weapon_animation_list
             new_ammunition.set_position(self.get_position())
             new_ammunition.set_direction_vector(self.direction_vector)
-
-        print('primary_weapon_attack')
+            self.ammunition_list.append(new_ammunition)
+            print('primary_weapon_attack')
 
     def secondary_weapon_attack(self):
         print('primary_weapon_attack')
