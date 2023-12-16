@@ -22,6 +22,7 @@ class FightingAircraftGame:
         self.airplane_info_map = {}
         self.maps_map = {}
         self.explode_map = {}
+        self.temporary_map = {}
         self.map = Map()
         self.player_plane = None
         self.key_states = {pg.K_UP: False,
@@ -67,6 +68,31 @@ class FightingAircraftGame:
         elif self.key_states[pg.K_k]:
             # start_point[0] += step
             self.player_plane.secondary_weapon_attack()
+
+    def load_all_temporary(self):
+        # 解析XML文件
+        tree = ET.parse('temporary.xml')
+        root = tree.getroot()
+
+        # 遍历子元素
+        name = 'bomb1'
+        explode_list = []
+        for sub_texture in root.findall(".//SubTexture"):
+            parts = sub_texture.get("name").split('/')
+            type_name = parts[0]
+            if name != type_name:
+                self.temporary_map[name] = explode_list.copy()
+                explode_list.clear()
+                name = type_name
+
+            explode_list.append({'x': int(sub_texture.get("x")),
+                                 'y': int(sub_texture.get('y')),
+                                 'width': int(sub_texture.get('width')),
+                                 'height': int(sub_texture.get('height'))})
+        # 最后一个补上
+        self.temporary_map[name] = explode_list
+
+        return self.temporary_map
 
     def load_all_plane_parameters(self):
         # 解析XML文件
@@ -187,12 +213,16 @@ class FightingAircraftGame:
         self.load_all_maps()
         self.load_all_plane_parameters()
         self.load_all_explodes()
-        self.ammunition_sprite = pg.image.load('explode.png')
+        self.load_all_temporary()
+        ammunition_sprite = pg.image.load('explode.png')
+        temporary_sprite = pg.image.load('temporary.png')
 
         # 加载飞机
         self.load_plane('Bf109')
-        self.player_plane.ammunition_sprite = self.ammunition_sprite
-        self.player_plane.primary_weapon_animation_list = self.explode_map['fire1']
+        # self.player_plane.ammunition_sprite = ammunition_sprite
+        # self.player_plane.primary_weapon_animation_list = self.explode_map['fire1']
+        self.player_plane.ammunition_sprite = temporary_sprite
+        self.player_plane.primary_weapon_animation_list = self.temporary_map['turret0']
         self.map.window_size = self.game_window_size
         self.map.load_map_xml(self.maps_map[0])
 
