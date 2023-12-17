@@ -14,6 +14,115 @@ from utils.cls_airplane import *
 from utils.cls_map import Map
 
 
+def load_xml_2_dict(file_name):
+    # 解析XML文件
+    tree = ET.parse(file_name)
+    root = tree.getroot()
+    sub_textures = {}
+
+    # 遍历子元素
+    for sub_texture in root.findall(".//SubTexture"):
+        parts = sub_texture.get("name").split('/')
+        type_name = parts[0]
+
+        # 根据名字的不同将内容归类
+        if len(parts) == 1:  # 炸弹
+            sub_textures[type_name] = {'x': int(sub_texture.get("x")),
+                                       'y': int(sub_texture.get('y')),
+                                       'width': int(sub_texture.get('width')),
+                                       'height': int(sub_texture.get('height'))}
+        else:  # 建筑
+            if type_name not in sub_textures:
+                sub_textures[type_name] = {}
+
+            sub_textures[type_name][parts[1]] = {'x': int(sub_texture.get("x")),
+                                                 'y': int(sub_texture.get('y')),
+                                                 'width': int(sub_texture.get('width')),
+                                                 'height': int(sub_texture.get('height'))}
+
+    return sub_textures
+
+
+class GameParameters:
+    def __init__(self):
+        self.airplane_info_map = {}
+        self.maps_map = {}
+        self.explode_sub_textures = {}
+        self.temporary_sub_textures = {}
+
+    def load_all(self):
+        self.load_explode()
+        self.load_temporary()
+        self.load_all_plane_parameters()
+        self.load_all_maps()
+
+    def load_temporary(self):
+        """
+        加载一个组合的2d精灵文件并按照分类将对应的内容提取出来
+        :return:
+        """
+        self.temporary_sub_textures = load_xml_2_dict('temporary.xml')
+
+    def load_explode(self):
+        self.explode_sub_textures = load_xml_2_dict('explode.xml')
+
+    def load_all_plane_parameters(self):
+        # 解析XML文件
+        tree = ET.parse('parameters.xml')
+        root = tree.getroot()
+
+        # 遍历子元素
+        for sub_texture in root.findall(".//SubTexture"):
+            airplane_name = sub_texture.get("name")
+            lifevalue = int(sub_texture.get("lifevalue"))
+            speed = float(sub_texture.get("speed"))
+            mainweapon = int(sub_texture.get("mainweapon"))
+            secondweapon = int(sub_texture.get("secondweapon"))
+            attackpower = int(sub_texture.get("attackpower"))
+            turnspeed = float(sub_texture.get("turnspeed"))
+            reloadtime = int(sub_texture.get("reloadtime"))
+            ammo = int(sub_texture.get("ammo"))
+
+            # 将飞机信息存储到映射中
+            self.airplane_info_map[airplane_name] = {
+                "lifevalue": lifevalue,
+                "speed": speed,
+                "mainweapon": mainweapon,
+                "secondweapon": secondweapon,
+                "attackpower": attackpower,
+                "turnspeed": turnspeed,
+                "reloadtime": reloadtime,
+                "ammo": ammo
+            }
+
+        return self.airplane_info_map
+
+    def load_all_maps(self):
+        # 首先加载都有哪些地图
+        num_xml_file = 0
+        for file in os.listdir('map'):
+            if file.endswith(".xml"):
+                self.maps_map[num_xml_file] = os.path.join('map', file)
+                num_xml_file += 1
+
+    def get_bullet(self, bullet_key):
+        """
+        加载子弹的贴图，参数为子弹的键
+        :param bullet_key: bullet1 - bullet6
+        :return:
+        """
+
+        return  self.temporary_sub_textures[bullet_key]
+
+    def get_building(self, building_key):
+        """
+        加载建筑的
+        :param building_key:
+        :return:
+        """
+
+        return self.temporary_sub_textures[building_key]
+
 class FightingAircraftGame:
     def __init__(self):
         self.game_name = "FightingAircraft"
@@ -202,7 +311,7 @@ class FightingAircraftGame:
                 pitch_mapping[int(parts[2][5:])] = {'x': x, 'y': y, 'width': width, 'height': height}
 
         # 返回图片路径和映射字典
-        return 'objects/'+image_path, roll_mapping, pitch_mapping
+        return 'objects/' + image_path, roll_mapping, pitch_mapping
 
     def run_game(self):
         pg.init()  # 初始化pg
@@ -216,6 +325,8 @@ class FightingAircraftGame:
         self.load_all_temporary()
         ammunition_sprite = pg.image.load('explode.png')
         temporary_sprite = pg.image.load('temporary.png')
+        param = GameParameters()
+        param.load_all()
 
         # 加载飞机
         self.load_plane('Bf109')
@@ -256,11 +367,11 @@ class FightingAircraftGame:
             for ammu in self.player_plane.ammunition_list:
                 self.map.render_object(
                     ammu.get_sprite(), self.player_plane.get_position(),
-                angle=self.player_plane.get_angle(), screen=screen)
+                    angle=self.player_plane.get_angle(), screen=screen)
 
             # 渲染文本
             text = font.render('Engine temperature: {:.2f}, Speed: {:.2f}'.format(
-                self.player_plane.get_engine_temperature(),self.player_plane.velocity), True, (0, 0, 0))
+                self.player_plane.get_engine_temperature(), self.player_plane.velocity), True, (0, 0, 0))
             # 获取文本矩形
             text_rect = text.get_rect()
             # 将文本绘制到屏幕上
