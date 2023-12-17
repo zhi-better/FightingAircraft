@@ -8,6 +8,12 @@ from utils.cls_obj import DynamicObject
 from abc import ABCMeta, abstractmethod
 
 
+class PlaneType(Enum):
+    FighterJet = 1
+    AttackAircraft = 2
+    Bomber = 3
+
+
 class FlyState(IntFlag):
     Norm = 0b00000000
     SharpTurnLeft = 0b00000100

@@ -6,7 +6,8 @@ import zlib
 import numpy as np
 import pygame as pg
 
-class Map:
+
+class GameRender:
     def __init__(self):
         self.height = 0
         self.width = 0
