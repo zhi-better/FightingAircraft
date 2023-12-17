@@ -33,7 +33,7 @@ class DynamicObject(StaticObject):
     def set_speed(self, speed):
         self.speed = speed
 
-    def move(self):
+    def move(self, delta_time):
         self.set_position(
             self.get_position() + int(self.speed) * np.multiply(self.direction_vector, np.array([1, -1])).astype(int))
 

@@ -104,6 +104,11 @@ class GameResources:
             reloadtime = int(sub_texture.get("reloadtime"))
             ammo = int(sub_texture.get("ammo"))
 
+            '''
+            speed=2 => 510km/h
+            turnSpeed=3 => 385m
+            '''
+
             # 将飞机信息存储到映射中
             self.airplane_info_map[airplane_name] = {
                 "lifevalue": lifevalue,
@@ -292,7 +297,7 @@ class FightingAircraftGame:
         :param delta_time: ms
         :return:
         """
-        self.player_plane.move()
+        self.player_plane.move(delta_time=delta_time)
 
     def render(self):
         # 清屏

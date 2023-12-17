@@ -61,28 +61,32 @@ class AirPlane(DynamicObject):
     def reset_roll_attitude(self):
         if self.roll_attitude == 0:
             self._roll_modulation_factor = 0
-        elif 0 < self.roll_attitude <= 18:
+        elif 1 <= self.roll_attitude <= 18:
             self._roll_modulation_factor = -1
-        elif 18 < self.roll_attitude < 36:
+        elif 18 < self.roll_attitude <= 35:
             self._roll_modulation_factor = 1
         else:
+            self._roll_modulation_factor = 0
+            self.roll_attitude = 0
             print('err roll attitude: {}'.format(self.roll_attitude))
 
     def reset_pitch_attitude(self):
         if self.pitch_attitude == 0:
             self._pitch_modulation_factor = 0
-        elif 0 < self.pitch_attitude <= 9:
+        elif 1 < self.pitch_attitude <= 9:
             self._pitch_modulation_factor = -1
-        elif 9 < self.pitch_attitude < 18:
+        elif 9 < self.pitch_attitude <= 17:
             self._pitch_modulation_factor = 1
-        elif self.pitch_attitude == 18:
+        elif 17 < self.pitch_attitude <= 18:
             self._pitch_modulation_factor = 0
             self.pitch_attitude = 0
             self.roll_attitude = 18
             self.direction_vector = self.direction_vector * -1
-        elif 18 < self.pitch_attitude < 36:
+        elif 18 < self.pitch_attitude < 35:
             self._pitch_modulation_factor = 1
         else:
+            self.pitch_attitude = 0
+            self._pitch_modulation_factor = 0
             print('err pitch attitude: {}'.format(self.pitch_attitude))
 
     def roll(self):
@@ -139,7 +143,7 @@ class AirPlane(DynamicObject):
         self.min_speed = 3
 
     @overrides
-    def move(self):
+    def move(self, delta_time):
         # 首先调整控制飞机姿态
         # ---------------------------------------------
         # 横滚
@@ -164,9 +168,9 @@ class AirPlane(DynamicObject):
                 self.reset_pitch_attitude()
         else:
             self.reset_pitch_attitude()
-        self.pitch_attitude += self._pitch_modulation_factor
+        self.pitch_attitude += self._pitch_modulation_factor * delta_time * 0.016
         self._pitch_modulation_factor = 0
-        if np.round(self.pitch_attitude) == 36:
+        if self.pitch_attitude >= 36:
             self.pitch_attitude = 0
         # print('\rplane roll attitude: {}, pitch attitude: {}. '.format(self.roll_attitude, self.pitch_attitude), end='')
 
@@ -206,10 +210,11 @@ class AirPlane(DynamicObject):
                     self.fly_state = self.fly_state | FlyState.TurnLeft
                 else:
                     self.engine_heat_rate += 0.5
-                    if self.roll_attitude < 9:
+                    if self.roll_attitude < 8:
                         self._roll_modulation_factor = 1
-                    elif self.roll_attitude == 9:
+                    elif 8 <= self.roll_attitude < 10:
                         self._roll_modulation_factor = 0
+                        self.roll_attitude = 9
                     else:
                         self.reset_roll_attitude()
                     self.angular_velocity = self.angular_speed * 2
@@ -221,23 +226,23 @@ class AirPlane(DynamicObject):
                     self.engine_heat_rate += 0.5
                     if self.roll_attitude == 0:
                         self.roll_attitude = 36
-                    if self.roll_attitude > 27:
+                    if self.roll_attitude > 28:
                         self._roll_modulation_factor = -1
-                    elif self.roll_attitude == 27:
+                    elif 26 < self.roll_attitude <= 28:
                         self._roll_modulation_factor = 0
+                        self.roll_attitude = 27
                     else:
                         self.reset_roll_attitude()
                     self.angular_velocity = self.angular_speed * -2
-            else:
-                if self._roll_modulation_factor == 0:
-                    self.reset_roll_attitude()
+
 
             # 普通转弯
             if self.fly_state & FlyState.TurnLeft:
                 if self.roll_attitude < 2:
                     self._roll_modulation_factor = 1
-                elif self.roll_attitude == 2:
+                elif self.roll_attitude >= 2:
                     self._roll_modulation_factor = 0
+                    self.roll_attitude = 2
                 else:
                     self.reset_roll_attitude()
                 self.angular_velocity = self.angular_speed
@@ -246,15 +251,21 @@ class AirPlane(DynamicObject):
                     self.roll_attitude = 36
                 if self.roll_attitude > 34:
                     self._roll_modulation_factor = -1
-                elif self.roll_attitude == 34:
+                elif self.roll_attitude <= 34:
                     self._roll_modulation_factor = 0
+                    self.roll_attitude = 34
                 else:
                     self.reset_roll_attitude()
                 self.angular_velocity = -self.angular_speed
-
-        self.roll_attitude += self._roll_modulation_factor
+            else:
+                if self._roll_modulation_factor == 0:
+                    self.reset_roll_attitude()
+        self.roll_attitude += self._roll_modulation_factor * delta_time * 0.016
         self._roll_modulation_factor = 0
-        if np.round(self.roll_attitude) == 36:
+        self.angular_velocity = self.angular_velocity * delta_time * 0.02
+
+        # 如果姿态不对，记得及时修正
+        if self.roll_attitude >= 36:
             self.roll_attitude = 0
 
         # ---------------------------------------------
@@ -266,8 +277,12 @@ class AirPlane(DynamicObject):
 
         # ---------------------------------------------
         # move
+        _2d_velocity = int(
+            self.velocity * delta_time * 0.1 * np.cos(np.radians(self.pitch_attitude * 10))) * np.multiply(self.direction_vector, np.array([1, -1]))
         self.set_position(
-            self.get_position() + int(self.velocity * np.cos(np.radians(self.pitch_attitude * 10))) * np.multiply(self.direction_vector, np.array([1, -1])))
+            self.get_position() + _2d_velocity)
+
+        print(f'\r velocity: {_2d_velocity[0]}, {_2d_velocity[1]}', end='')
 
         # ---------------------------------------------
         # 发动机温度
@@ -279,7 +294,9 @@ class AirPlane(DynamicObject):
             else:
                 self.engine_heat_rate = -0.3
         self._engine_temperature = np.minimum(
-            100, np.maximum(0, self._engine_temperature + self.engine_heat_rate))
+            100, np.maximum(0, self._engine_temperature + self.engine_heat_rate * delta_time * 0))
+        # self._engine_temperature = np.minimum(
+        #     100, np.maximum(0, self._engine_temperature + self.engine_heat_rate * delta_time * 0.02))
         self.heat_counter += 1
         self.engine_heat_rate = 0
 
