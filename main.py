@@ -5,6 +5,8 @@ import sys
 import threading
 import zlib
 import asyncio
+
+import pyautogui
 import pygame as pg
 import time
 import xml.etree.ElementTree as ET
@@ -215,13 +217,14 @@ class GameResources:
         plane.set_speed(param['speed'])
         plane.angular_speed = param['turnspeed']
         plane.health_points = param['lifevalue']
-
+        plane.air_plane_params.primary_weapon_reload_time = 0.2
+        plane.air_plane_params.secondary_weapon_reload_time = 0.1
         image_path, roll_mapping, pitch_mapping = self.load_plane_sprites('objects/{}.xml'.format(plane_name))
         plane.load_sprite('objects/{}.png'.format(plane_name))
         plane.air_plane_sprites.roll_mapping = roll_mapping
         plane.air_plane_sprites.pitch_mapping = pitch_mapping
         # 设置主武器和副武器的贴图资源
-        sprite, rect = self.get_bullet_sprite('bullet' + str(param['mainweapon']))
+        sprite, rect = self.get_bullet_sprite('bullet' + str(param['mainweapon']+1))
         plane.air_plane_sprites.primary_bullet_sprite = get_sprite_rect(rect, sprite)
         sprite, rect = self.get_bullet_sprite('bullet' + str(param['secondweapon']))
         plane.air_plane_sprites.secondary_bullet_sprite = get_sprite_rect(rect, sprite)
@@ -300,10 +303,10 @@ class FightingAircraftGame:
 
         if self.key_states[pg.K_j]:
             # start_point[0] += step
-            self.player_plane.primary_weapon_attack()
+            self.player_plane.primary_fire()
         elif self.key_states[pg.K_k]:
             # start_point[0] += step
-            self.player_plane.secondary_weapon_attack()
+            self.player_plane.secondary_fire()
 
     def fixed_update(self, delta_time):
         """
@@ -318,8 +321,8 @@ class FightingAircraftGame:
         # 所有发射的弹药也得 move
         for bullet in self.player_plane.bullet_list:
             pos = bullet.get_position()
-            pos[0] = pos[0] % (self.map_size[0] + 1)
-            pos[1] = pos[1] % (self.map_size[1] + 1)
+            pos[0] = pos[0] % self.map_size[0]
+            pos[1] = pos[1] % self.map_size[1]
             bullet.set_position(pos)
         # print('\rdelta time: {}, render pos: {}, {}'.format(
         #     delta_time, pos[0], pos[1]), end='')
@@ -373,6 +376,14 @@ class FightingAircraftGame:
         self.game_render.load_map_xml(self.game_resources.get_map(5))
         self.map_size = self.game_render.get_map_size()
         # self.player_plane.set_speed(0)
+
+        # 解决输入法问题
+        # 模拟按下 Shift 键
+        pyautogui.keyDown('shift')
+        # 在这里可以添加一些程序逻辑，模拟按下 Shift 键后的操作
+        # time.sleep(1)  # 为了演示，这里等待1秒
+        # 松开 Shift 键
+        pyautogui.keyUp('shift')
 
         # 设置渲染线程为子线程
         self.thread_render.start()

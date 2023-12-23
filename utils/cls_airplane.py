@@ -8,11 +8,11 @@ from utils.cls_obj import *
 from abc import ABCMeta, abstractmethod
 
 
-
 class AttitudeType(Enum):
     NoneAttitude = 0
     RollAttitude = 1
     PitchAttitude = 2
+
 
 class PlaneType(Enum):
     FighterJet = 1
@@ -206,6 +206,7 @@ class AirPlane(DynamicObject):
 
     def primary_fire(self):
         self.plane_state = self.plane_state | InputState.PrimaryWeaponAttack
+
     def secondary_fire(self):
         self.plane_state = self.plane_state | InputState.SecondaryWeaponAttack
 
@@ -267,7 +268,7 @@ class AirPlane(DynamicObject):
         else:
             # 速度插值，为了恢复常规的运行速度
             self.velocity += np.sign(self.speed - self.velocity) * 0.1
-            if np.abs(self.velocity-self.speed) < 0.2:
+            if np.abs(self.velocity - self.speed) < 0.2:
                 self.velocity = self.speed
         self._velocity_modulation_factor = 0
         # print('\rthe real speed is: {:.2f}, engine temperature is: {}'.format(
@@ -363,19 +364,37 @@ class AirPlane(DynamicObject):
         self.heat_counter += 1
         self.air_plane_params.engine_heat_rate = 0
 
+        if self.plane_state & InputState.PrimaryWeaponAttack:
+            if self.primary_weapon_reload_counter <= 0:
+                self.primary_weapon_attack()
+                self.primary_weapon_reload_counter += self.air_plane_params.primary_weapon_reload_time
+            else:
+                self.primary_weapon_reload_counter -= delta_time * 0.001
+        else:
+            if self.primary_weapon_reload_counter <= 0:
+                self.primary_weapon_reload_counter = 0
+            else:
+                self.primary_weapon_reload_counter -= delta_time * 0.001
+
+        if self.plane_state & InputState.SecondaryWeaponAttack:
+            if self.secondary_weapon_reload_counter <= 0:
+                self.secondary_weapon_attack()
+                self.secondary_weapon_reload_counter += self.air_plane_params.secondary_weapon_reload_time
+            else:
+                self.secondary_weapon_reload_counter -= delta_time * 0.001
+        else:
+            if self.secondary_weapon_reload_counter <= 0:
+                self.secondary_weapon_reload_counter = 0
+            else:
+                self.secondary_weapon_reload_counter -= delta_time * 0.001
+
+        # --------------------------------------------------------------------
         # 重置飞行状态
         self.plane_state = InputState.NoInput
 
         pos, direction_vector = self.move(delta_time=delta_time)
         self.direction_vector = direction_vector
         self.set_position(pos)
-
-        if self.plane_state & InputState.PrimaryWeaponAttack:
-            if self.primary_weapon_reload_counter >= self.air_plane_params.secondary_weapon_reload_time:
-                self.primary_weapon_attack()
-                self.primary_weapon_reload_counter -= self.air_plane_params.secondary_weapon_reload_time
-            else:
-                self.primary_weapon_reload_counter += delta_time
 
         for bullet in self.bullet_list:
             pos, _ = bullet.move(delta_time=delta_time)
@@ -401,9 +420,10 @@ class AirPlane(DynamicObject):
     def sharply_turn_right(self):
         self.plane_state = self.plane_state | InputState.SharpTurnRight
 
-    def create_bullet(self, local_position, direction):
+    def create_bullet(self, bullet_sprite, local_position, direction):
         new_bullet = Bullet()
-        new_bullet.sprite = self.air_plane_sprites.primary_bullet_sprite
+        new_bullet.sprite = bullet_sprite
+        local_position[1] = np.cos(np.radians(self.roll_attitude * 10)) * local_position[1]
         new_bullet.set_position(local_to_world(
             self.get_position(), direction, local_point=local_position))
         new_bullet.set_speed(self.velocity + 3)
@@ -428,16 +448,19 @@ class FighterJet(AirPlane):
         self.reload_time = 1
 
     def primary_weapon_attack(self):
-        # 可以使用循环一次性创建一圈子弹，例如：
-        # 使用单位圆上的坐标值计算方向
-        for i in range(12):
-            angle = i * (360 / 12)
-            direction = np.array([np.cos(np.radians(angle)), np.sin(np.radians(angle))])
-            local_position = np.array([25, 30])  # 或者其他位置
-            self.create_bullet(local_position, direction)
+        position_list = [[45, 30],
+                         [45, 15],
+                         [45, -15],
+                         [45, -30]]
+
+        for pos in position_list:
+            self.create_bullet(self.air_plane_sprites.primary_bullet_sprite, np.array(pos), self.direction_vector)
 
     def secondary_weapon_attack(self):
-        print('primary_weapon_attack')
+        position_list = [[55, 0]]
+
+        for pos in position_list:
+            self.create_bullet(self.air_plane_sprites.secondary_bullet_sprite, np.array(pos), self.direction_vector)
 
 
 class AttackAircraft(AirPlane):
