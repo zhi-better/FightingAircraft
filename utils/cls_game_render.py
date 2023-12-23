@@ -21,6 +21,9 @@ class GameRender:
         self.y_load_block_count = 0
         self.view_position = np.zeros((2,))
 
+    def get_map_size(self):
+        return np.array([self.width * self.tile_width, self.height * self.tile_height])
+
     def get_rect_from_tile_id(self, tile_id, tile_width, tile_height):
         if tile_id != 0:
             rec_x = tile_id % 8 - 1

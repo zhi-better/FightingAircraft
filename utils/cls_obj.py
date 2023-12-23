@@ -1,3 +1,5 @@
+from abc import abstractmethod
+
 import numpy as np
 import pygame
 
@@ -8,6 +10,10 @@ class StaticObject:
         self.faction_mask = 0
         self.sprite = None
         self.collision_box = None
+
+    @abstractmethod
+    def update(self, delta_time):
+        pass
 
     def get_sprite(self):
 
@@ -40,6 +46,8 @@ class DynamicObject(StaticObject):
     def set_direction_vector(self, vector_2d):
         self.direction_vector = vector_2d
 
+    def update(self, delta_time):
+        pass
 
 
 

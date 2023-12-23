@@ -2,6 +2,7 @@ import base64
 import os
 import struct
 import sys
+import threading
 import zlib
 import asyncio
 import pygame as pg
@@ -132,7 +133,7 @@ class GameResources:
                 num_xml_file += 1
 
     def get_map(self, map_index=0):
-        return self.maps_map[0]
+        return self.maps_map[map_index]
 
     def get_bullet_sprite(self, bullet_key='bullet1'):
         """
@@ -218,8 +219,8 @@ class GameResources:
 
         image_path, roll_mapping, pitch_mapping = self.load_plane_sprites('objects/{}.xml'.format(plane_name))
         plane.load_sprite('objects/{}.png'.format(plane_name))
-        plane.roll_mapping = roll_mapping
-        plane.pitch_mapping = pitch_mapping
+        plane.air_plane_sprites.roll_mapping = roll_mapping
+        plane.air_plane_sprites.pitch_mapping = pitch_mapping
         plane.primary_weapon_animation_list, plane.ammunition_sprite = self.get_explode_animation()
         return plane
 
@@ -233,6 +234,9 @@ class FightingAircraftGame:
         self.game_render = GameRender()
         self.player_plane = None
         self.screen = None
+        self.map_size = np.zeros((2,))
+        self.fps_render = 30
+        self.fps_physics = 30
         self.key_states = {pg.K_UP: False,
                            pg.K_DOWN: False,
                            pg.K_LEFT: False,
@@ -243,6 +247,11 @@ class FightingAircraftGame:
                            pg.K_LSHIFT: False,
                            pg.K_j: False,
                            pg.K_k: False}
+
+        self.lock = threading.RLock()  # 线程锁，保证渲染和物理运算的顺序
+        self.clock_render = pg.time.Clock()  # 渲染线程的时钟
+        self.thread_render = threading.Thread(target=self.render, daemon=True)
+        self.render_delta_time = 0
 
     def input_manager(self):
         # 处理输入
@@ -262,7 +271,7 @@ class FightingAircraftGame:
         # print(pg.key.name(bools.index(1)))
         if self.key_states[pg.K_UP]:
             # start_point[1] -= step
-            self.player_plane.sppe_up()
+            self.player_plane.speed_up()
         elif self.key_states[pg.K_DOWN]:
             # start_point[1] += step
             self.player_plane.slow_down()
@@ -297,48 +306,72 @@ class FightingAircraftGame:
         :param delta_time: ms
         :return:
         """
-        self.player_plane.move(delta_time=delta_time)
+        pos, _ = self.player_plane.fixed_update(delta_time=delta_time)
+        pos[0] = pos[0] % self.map_size[0]
+        pos[1] = pos[1] % self.map_size[1]
+        self.player_plane.set_position(pos)
+        print('\rdelta time: {}, render pos: {}, {}'.format(
+            delta_time, pos[0], pos[1]), end='')
+        # self.player_plane.move(delta_time=delta_time)
 
     def render(self):
-        # 清屏
-        self.screen.fill((255, 255, 255))
-        self.game_render.render_map(self.player_plane.get_position(), screen=self.screen)
-        self.game_render.render_object(
-            self.player_plane.get_sprite(), self.player_plane.get_position(),
-            angle=self.player_plane.get_angle(), screen=self.screen)
-        for ammu in self.player_plane.ammunition_list:
+        print('render thread started. ')
+        delta_time = 1 / self.fps_render
+        self.render_delta_time = 0
+        while True:
+            self.lock.acquire()
+            self.render_delta_time += delta_time
+            # print(f'render delta time: {self.render_delta_time}')
+            # 清屏
+            self.screen.fill((255, 255, 255))
+            pos, dir_v = self.player_plane.move(delta_time=self.render_delta_time)
+            self.game_render.render_map(pos, screen=self.screen)
+            # print('\rdelta time: {}, render pos: {}, {}'.format(self.render_delta_time, pos[0], pos[1]), end='')
             self.game_render.render_object(
-                ammu.get_sprite(), self.player_plane.get_position(),
-                angle=self.player_plane.get_angle(), screen=self.screen)
+                self.player_plane.get_sprite(), pos,
+                angle=self.player_plane.get_angle(direction_vector=dir_v), screen=self.screen)
+            # for ammu in self.player_plane.air_plane_sprites.ammunition_list:
+            #     self.game_render.render_object(
+            #         ammu.get_sprite(), self.player_plane.get_position(),
+            #         angle=self.player_plane.get_angle(), screen=self.screen)
 
-        # 渲染文本
-        # 定义字体和字号
-        font = pg.font.Font(None, 36)
-        text = font.render('Engine temperature: {:.2f}, Speed: {:.2f}'.format(
-            self.player_plane.get_engine_temperature(), self.player_plane.velocity),
-            True, (0, 0, 0))
-        # 将文本绘制到屏幕上
-        self.screen.blit(text, (10, 10))
-        pg.display.flip()  # 更新全部显示
+            # 渲染文本
+            # 定义字体和字号
+            font = pg.font.Font(None, 36)
+            text = font.render('Engine temperature: {:.2f}, Speed: {:.2f}'.format(
+                self.player_plane.get_engine_temperature(), self.player_plane.velocity),
+                True, (0, 0, 0))
+            # 将文本绘制到屏幕上
+            self.screen.blit(text, (10, 10))
+            pg.display.flip()  # 更新全部显示
+            self.lock.release()
+            delta_time = self.clock_render.tick(self.fps_render)
 
     def run_game(self):
         pg.init()  # 初始化pg
         self.screen = pg.display.set_mode(self.game_window_size)  # 显示窗口
         pg.display.set_caption(self.game_name)
+        self.fps_render = 60
 
         # 加载飞机
         self.player_plane = self.game_resources.get_plane('Bf109', plane_type=PlaneType.FighterJet)
         self.game_render.window_size = self.game_window_size
-        self.game_render.load_map_xml(self.game_resources.get_map(0))
-        # # 创建一个时钟对象
-        # clock = pygame.time.Clock()
 
+        self.game_render.load_map_xml(self.game_resources.get_map(5))
+        self.map_size = self.game_render.get_map_size()
+
+        # 设置渲染线程为子线程
+        self.thread_render.start()
+
+        delta_time = 1 / self.fps_physics
+        # 此处只有物理运行，关于图形渲染是一个新的单独的线程
         while True:
-            delta_time = self.clock.tick(30)    # 获取时间差，控制帧率
-
+            self.lock.acquire()
+            self.render_delta_time = 0
             self.input_manager()    # 输入管理
             self.fixed_update(delta_time=delta_time)    # 物理运算
-            self.render()   # 渲染处理
+            self.lock.release()
+            delta_time = self.clock.tick(self.fps_physics)  # 获取时间差，控制帧率
 
 
 if __name__ == '__main__':
