@@ -13,6 +13,7 @@ class GameRender:
         self.width = 0
         self.tile_width = 0
         self.tile_height = 0
+        self.map_size = np.zeros((2,))
         self.image_source = ''
         self.tile_ids = []
         self.window_size = np.zeros((2,))
@@ -22,7 +23,7 @@ class GameRender:
         self.view_position = np.zeros((2,))
 
     def get_map_size(self):
-        return np.array([self.width * self.tile_width, self.height * self.tile_height])
+        return self.map_size
 
     def get_rect_from_tile_id(self, tile_id, tile_width, tile_height):
         if tile_id != 0:
@@ -49,8 +50,24 @@ class GameRender:
 
         # 获取旋转后的矩形
         sprite = pg.transform.rotate(sprite, angle)
-        a = np.floor(self.view_position[0] - position[0])
-        b = np.floor(self.view_position[1] - position[1])
+        # 此处有可能再地图边界由于分界线出现bug问题，需要额外处理
+        right_down_threshold = self.map_size - 0.5 * self.window_size
+        left_top_threshold = 0.5 * self.window_size
+        if (position[0] > right_down_threshold[0]
+                and self.view_position[0] < left_top_threshold[0]):
+            position[0] -= self.map_size[0]
+        elif (self.view_position[0] > right_down_threshold[0]
+                and position[0] < left_top_threshold[0]):
+            position[0] += self.map_size[0]
+        elif (position[1] > right_down_threshold[1]
+                and self.view_position[1] < left_top_threshold[0]):
+            position[1] -= self.map_size[1]
+        elif (self.view_position[1] > right_down_threshold[1]
+                and position[1] < left_top_threshold[0]):
+            position[1] += self.map_size[1]
+        a = np.floor(position[0] - self.view_position[0])
+        # 好你个bug，老子找了半天才发现坐标系是反的
+        b = np.floor(position[1] - self.view_position[1])
         plane_rect = sprite.get_rect(
             center=(0.5 * self.window_size[0] + a,
                     0.5 * self.window_size[1] + b))
@@ -112,6 +129,7 @@ class GameRender:
         self.x_load_block_count = int(np.ceil(self.window_size[0] * 0.5 / self.tile_width)) + 1
         self.y_load_block_count = int(np.ceil(self.window_size[1] * 0.5 / self.tile_height)) + 1
 
+        self.map_size = np.array([self.width * self.tile_width, self.height * self.tile_height])
 
 
 

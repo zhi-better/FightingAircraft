@@ -4,8 +4,10 @@ import numpy as np
 import pygame
 from overrides import overrides
 from utils.cls_ammunition import *
-from utils.cls_obj import DynamicObject
+from utils.cls_obj import *
 from abc import ABCMeta, abstractmethod
+
+
 
 class AttitudeType(Enum):
     NoneAttitude = 0
@@ -61,18 +63,13 @@ class AirPlaneParams:
         self.secondary_weapon_reload_time = 0.5
 
 
-
-
 class AirPlane(DynamicObject):
     def __init__(self):
         super().__init__()
         self.air_plane_sprites = AirPlaneSprites()
         self.air_plane_params = AirPlaneParams()
-
-        self.velocity = 0
         self._velocity_modulation_factor = 0
-        self.angular_velocity = 0
-
+        # self.angular_velocity = 0
         self._engine_temperature = 0
         self.heat_counter = 60
         self.roll_attitude = 0.0
@@ -84,6 +81,8 @@ class AirPlane(DynamicObject):
         self.primary_weapon_reload_counter = 0
         self.secondary_weapon_reload_counter = 0
         self.map_size = np.array([])
+
+        self.bullet_list = []
 
     def get_air_plane_params(self):
         return self.air_plane_params
@@ -146,22 +145,12 @@ class AirPlane(DynamicObject):
             rect_dic = self.air_plane_sprites.pitch_mapping[int(self.pitch_attitude)]
         else:
             rect_dic = self.air_plane_sprites.pitch_mapping[int(0)]
-        plane_rect = pygame.Rect(rect_dic['x'], rect_dic['y'], rect_dic['width'], rect_dic['height'])
-        plane_sprite_subsurface = self.sprite.subsurface(plane_rect)
+        # plane_rect = pygame.Rect(rect_dic['x'], rect_dic['y'], rect_dic['width'], rect_dic['height'])
+        # plane_sprite_subsurface = self.sprite.subsurface(plane_rect)
+        plane_sprite_subsurface = get_sprite_rect(self.sprite, rect_dic)
         # self.sprite_attitude = pygame.transform.rotate(plane_sprite_subsurface, self.get_angle())
 
         return plane_sprite_subsurface
-
-    def get_angle(self, direction_vector):
-        """
-        获取飞机当前在屏幕上渲染的2d角度
-        :return:
-        """
-        angle_rad = np.arctan2(direction_vector[1], direction_vector[0])
-        # 将弧度转换为角度
-        angle_deg = np.degrees(angle_rad)
-        # print(angle_deg)
-        return float(angle_deg)
 
     def speed_up(self):
         """
@@ -189,7 +178,7 @@ class AirPlane(DynamicObject):
         self.speed = speed
         self.velocity = speed
         self.max_speed = self.speed * 2
-        self.min_speed = 3
+        self.min_speed = self.speed * 0.7
 
     @overrides
     def move(self, delta_time):
@@ -213,21 +202,6 @@ class AirPlane(DynamicObject):
             self.velocity * delta_time * 0.1 * np.cos(np.radians(self.pitch_attitude * 10))) * np.multiply(
             direction_vector, np.array([1, -1]))
 
-        # # ---------------------------------------------
-        # # turn
-        # rotation_matrix = np.array(
-        #     [[np.cos(np.radians(self.angular_velocity)), -np.sin(np.radians(self.angular_velocity))],
-        #      [np.sin(np.radians(self.angular_velocity)), np.cos(np.radians(self.angular_velocity))]])
-        # self.direction_vector = np.dot(rotation_matrix, self.direction_vector)
-        # # ---------------------------------------------
-        # # move
-        # _2d_velocity = int(
-        #     self.velocity * delta_time * 0.1 * np.cos(np.radians(self.pitch_attitude * 10))) * np.multiply(
-        #     self.direction_vector, np.array([1, -1]))
-        # self.set_position(
-        #     self.get_position() + _2d_velocity)
-
-        # print(f'\r velocity: {_2d_velocity[0]}, {_2d_velocity[1]}', end='')
         return self.get_position() + _2d_velocity, direction_vector
 
     def primary_fire(self):
@@ -292,7 +266,9 @@ class AirPlane(DynamicObject):
             self.velocity = np.maximum(self.velocity + self._velocity_modulation_factor, self.min_speed)
         else:
             # 速度插值，为了恢复常规的运行速度
-            self.velocity += np.sign(self.speed - self.velocity) * 0.5
+            self.velocity += np.sign(self.speed - self.velocity) * 0.1
+            if np.abs(self.velocity-self.speed) < 0.2:
+                self.velocity = self.speed
         self._velocity_modulation_factor = 0
         # print('\rthe real speed is: {:.2f}, engine temperature is: {}'.format(
         #     self.velocity, self._engine_temperature), end='')
@@ -381,7 +357,7 @@ class AirPlane(DynamicObject):
             else:
                 self.air_plane_params.engine_heat_rate = -0.3
         self._engine_temperature = np.minimum(
-            100, np.maximum(0, self._engine_temperature + self.air_plane_params.engine_heat_rate * delta_time * 0.01))
+            100, np.maximum(0, self._engine_temperature + self.air_plane_params.engine_heat_rate * delta_time * 0))
         # self._engine_temperature = np.minimum(
         #     100, np.maximum(0, self._engine_temperature + self.engine_heat_rate * delta_time * 0.02))
         self.heat_counter += 1
@@ -394,19 +370,19 @@ class AirPlane(DynamicObject):
         self.direction_vector = direction_vector
         self.set_position(pos)
 
-        # pos = self.get_position()
-        # print('\rposition: {}, {}'.format(pos[0], pos[1]), end='')
-        # if self.primary_weapon_reload_counter >= self.air_plane_params.secondary_weapon_reload_time:
-        #     self.primary_weapon_attack()
-        #     self.primary_weapon_reload_counter -= self.air_plane_params.secondary_weapon_reload_time
-        # else:
-        #     self.primary_weapon_reload_counter += delta_time
-        # self.primary_weapon_attack()
-        # self.secondary_weapon_attack()
+        if self.plane_state & InputState.PrimaryWeaponAttack:
+            if self.primary_weapon_reload_counter >= self.air_plane_params.secondary_weapon_reload_time:
+                self.primary_weapon_attack()
+                self.primary_weapon_reload_counter -= self.air_plane_params.secondary_weapon_reload_time
+            else:
+                self.primary_weapon_reload_counter += delta_time
 
-        # 所有发射的弹药也得 move
-        for ammu in self.air_plane_sprites.ammunition_list:
-            ammu.move(delta_time=delta_time)
+        for bullet in self.bullet_list:
+            pos, _ = bullet.move(delta_time=delta_time)
+            bullet.set_position(pos)
+            if bullet.time_passed >= bullet.life_time:
+                self.bullet_list.remove(bullet)
+                # print('bullet removed. ')
 
         return self.get_position(), self.get_angle(self.direction_vector)
 
@@ -424,6 +400,15 @@ class AirPlane(DynamicObject):
 
     def sharply_turn_right(self):
         self.plane_state = self.plane_state | InputState.SharpTurnRight
+
+    def create_bullet(self, local_position, direction):
+        new_bullet = Bullet()
+        new_bullet.sprite = self.air_plane_sprites.primary_bullet_sprite
+        new_bullet.set_position(local_to_world(
+            self.get_position(), direction, local_point=local_position))
+        new_bullet.set_speed(self.velocity + 3)
+        new_bullet.set_direction_vector(direction)
+        self.bullet_list.append(new_bullet)
 
     @abstractmethod
     def primary_weapon_attack(self):
@@ -443,14 +428,13 @@ class FighterJet(AirPlane):
         self.reload_time = 1
 
     def primary_weapon_attack(self):
-        # 首先根据创建的武器类型在对应位置创建对应的子弹
-        new_ammunition = Ammunition()
-        new_ammunition.sprite = self.ammunition_sprite
-        new_ammunition.animation_list = self.primary_weapon_animation_list
-        new_ammunition.set_position(self.get_position())
-        new_ammunition.set_direction_vector(self.direction_vector)
-        self.ammunition_list.append(new_ammunition)
-        print('primary_weapon_attack')
+        # 可以使用循环一次性创建一圈子弹，例如：
+        # 使用单位圆上的坐标值计算方向
+        for i in range(12):
+            angle = i * (360 / 12)
+            direction = np.array([np.cos(np.radians(angle)), np.sin(np.radians(angle))])
+            local_position = np.array([25, 30])  # 或者其他位置
+            self.create_bullet(local_position, direction)
 
     def secondary_weapon_attack(self):
         print('primary_weapon_attack')

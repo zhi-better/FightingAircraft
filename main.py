@@ -109,7 +109,6 @@ class GameResources:
             speed=2 => 510km/h
             turnSpeed=3 => 385m
             '''
-
             # 将飞机信息存储到映射中
             self.airplane_info_map[airplane_name] = {
                 "lifevalue": lifevalue,
@@ -221,7 +220,11 @@ class GameResources:
         plane.load_sprite('objects/{}.png'.format(plane_name))
         plane.air_plane_sprites.roll_mapping = roll_mapping
         plane.air_plane_sprites.pitch_mapping = pitch_mapping
-        plane.primary_weapon_animation_list, plane.ammunition_sprite = self.get_explode_animation()
+        # 设置主武器和副武器的贴图资源
+        sprite, rect = self.get_bullet_sprite('bullet' + str(param['mainweapon']))
+        plane.air_plane_sprites.primary_bullet_sprite = get_sprite_rect(rect, sprite)
+        sprite, rect = self.get_bullet_sprite('bullet' + str(param['secondweapon']))
+        plane.air_plane_sprites.secondary_bullet_sprite = get_sprite_rect(rect, sprite)
         return plane
 
 
@@ -246,7 +249,8 @@ class FightingAircraftGame:
                            pg.K_SPACE: False,
                            pg.K_LSHIFT: False,
                            pg.K_j: False,
-                           pg.K_k: False}
+                           pg.K_k: False,
+                           pg.K_f: False}
 
         self.lock = threading.RLock()  # 线程锁，保证渲染和物理运算的顺序
         self.clock_render = pg.time.Clock()  # 渲染线程的时钟
@@ -290,10 +294,11 @@ class FightingAircraftGame:
         elif self.key_states[pg.K_SPACE]:
             # start_point[0] += step
             self.player_plane.pitch()
-        elif self.key_states[pg.K_LSHIFT]:
+        elif self.key_states[pg.K_f]:
             # start_point[0] += step
             self.player_plane.roll()
-        elif self.key_states[pg.K_j]:
+
+        if self.key_states[pg.K_j]:
             # start_point[0] += step
             self.player_plane.primary_weapon_attack()
         elif self.key_states[pg.K_k]:
@@ -310,8 +315,14 @@ class FightingAircraftGame:
         pos[0] = pos[0] % self.map_size[0]
         pos[1] = pos[1] % self.map_size[1]
         self.player_plane.set_position(pos)
-        print('\rdelta time: {}, render pos: {}, {}'.format(
-            delta_time, pos[0], pos[1]), end='')
+        # 所有发射的弹药也得 move
+        for bullet in self.player_plane.bullet_list:
+            pos = bullet.get_position()
+            pos[0] = pos[0] % (self.map_size[0] + 1)
+            pos[1] = pos[1] % (self.map_size[1] + 1)
+            bullet.set_position(pos)
+        # print('\rdelta time: {}, render pos: {}, {}'.format(
+        #     delta_time, pos[0], pos[1]), end='')
         # self.player_plane.move(delta_time=delta_time)
 
     def render(self):
@@ -330,16 +341,18 @@ class FightingAircraftGame:
             self.game_render.render_object(
                 self.player_plane.get_sprite(), pos,
                 angle=self.player_plane.get_angle(direction_vector=dir_v), screen=self.screen)
-            # for ammu in self.player_plane.air_plane_sprites.ammunition_list:
-            #     self.game_render.render_object(
-            #         ammu.get_sprite(), self.player_plane.get_position(),
-            #         angle=self.player_plane.get_angle(), screen=self.screen)
+            print('\r obj count: {}'.format(len(self.player_plane.bullet_list)), end='')
+            for bullet in self.player_plane.bullet_list:
+                self.game_render.render_object(
+                    bullet.get_sprite(), bullet.get_position(),
+                    angle=bullet.get_angle(bullet.direction_vector), screen=self.screen)
 
             # 渲染文本
             # 定义字体和字号
             font = pg.font.Font(None, 36)
-            text = font.render('Engine temperature: {:.2f}, Speed: {:.2f}'.format(
-                self.player_plane.get_engine_temperature(), self.player_plane.velocity),
+            text = font.render('Engine temperature: {:.2f}, Speed: {:.2f}, position: [{:.2f}, {:.2f}], dir_vector: [{:.2f}, {:.2f}]'.format(
+                self.player_plane.get_engine_temperature(), self.player_plane.velocity,
+                pos[0], pos[1], dir_v[0], dir_v[1]),
                 True, (0, 0, 0))
             # 将文本绘制到屏幕上
             self.screen.blit(text, (10, 10))
@@ -351,14 +364,15 @@ class FightingAircraftGame:
         pg.init()  # 初始化pg
         self.screen = pg.display.set_mode(self.game_window_size)  # 显示窗口
         pg.display.set_caption(self.game_name)
-        self.fps_render = 60
+        self.fps_render = 30
 
         # 加载飞机
         self.player_plane = self.game_resources.get_plane('Bf109', plane_type=PlaneType.FighterJet)
-        self.game_render.window_size = self.game_window_size
+        self.game_render.window_size = np.array(self.game_window_size).reshape((2,))
 
         self.game_render.load_map_xml(self.game_resources.get_map(5))
         self.map_size = self.game_render.get_map_size()
+        # self.player_plane.set_speed(0)
 
         # 设置渲染线程为子线程
         self.thread_render.start()
@@ -368,10 +382,11 @@ class FightingAircraftGame:
         while True:
             self.lock.acquire()
             self.render_delta_time = 0
-            self.input_manager()    # 输入管理
-            self.fixed_update(delta_time=delta_time)    # 物理运算
+            self.input_manager()  # 输入管理
+            self.fixed_update(delta_time=delta_time)  # 物理运算
             self.lock.release()
             delta_time = self.clock.tick(self.fps_physics)  # 获取时间差，控制帧率
+            # delta_time = 0
 
 
 if __name__ == '__main__':
