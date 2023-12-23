@@ -13,6 +13,7 @@ import xml.etree.ElementTree as ET
 from PIL import Image
 import numpy as np
 
+from utils.SocketTcpTools import *
 from utils.cls_airplane import *
 from utils.cls_game_render import *
 
@@ -219,6 +220,8 @@ class GameResources:
         plane.health_points = param['lifevalue']
         plane.air_plane_params.primary_weapon_reload_time = 0.2
         plane.air_plane_params.secondary_weapon_reload_time = 0.1
+        # plane.air_plane_params.primary_weapon_reload_time = 0
+        # plane.air_plane_params.secondary_weapon_reload_time = 0
         image_path, roll_mapping, pitch_mapping = self.load_plane_sprites('objects/{}.xml'.format(plane_name))
         plane.load_sprite('objects/{}.png'.format(plane_name))
         plane.air_plane_sprites.roll_mapping = roll_mapping
@@ -243,6 +246,7 @@ class FightingAircraftGame:
         self.map_size = np.zeros((2,))
         self.fps_render = 30
         self.fps_physics = 30
+        self.client = TcpClientTools()
         self.key_states = {pg.K_UP: False,
                            pg.K_DOWN: False,
                            pg.K_LEFT: False,
@@ -259,6 +263,13 @@ class FightingAircraftGame:
         self.clock_render = pg.time.Clock()  # 渲染线程的时钟
         self.thread_render = threading.Thread(target=self.render, daemon=True)
         self.render_delta_time = 0
+        self.recv_server_signal = False
+
+    def callback_recv(self, data):
+        self.recv_server_signal = True
+        self.player_plane.input_state = InputState(int.from_bytes(data, byteorder='big'))
+        # print('\r{}'.format(data), end='')
+        # print(data)
 
     def input_manager(self):
         # 处理输入
@@ -308,6 +319,9 @@ class FightingAircraftGame:
             # start_point[0] += step
             self.player_plane.secondary_fire()
 
+        self.client.send(self.player_plane.input_state.to_bytes(2, 'big'),
+                         pack_data=True, data_type=DataType.TypeBinary)
+
     def fixed_update(self, delta_time):
         """
         用于更新物理计算
@@ -344,7 +358,7 @@ class FightingAircraftGame:
             self.game_render.render_object(
                 self.player_plane.get_sprite(), pos,
                 angle=self.player_plane.get_angle(direction_vector=dir_v), screen=self.screen)
-            print('\r obj count: {}'.format(len(self.player_plane.bullet_list)), end='')
+            # print('\r obj count: {}'.format(len(self.player_plane.bullet_list)), end='')
             for bullet in self.player_plane.bullet_list:
                 self.game_render.render_object(
                     bullet.get_sprite(), bullet.get_position(),
@@ -368,6 +382,9 @@ class FightingAircraftGame:
         self.screen = pg.display.set_mode(self.game_window_size)  # 显示窗口
         pg.display.set_caption(self.game_name)
         self.fps_render = 30
+        self.client.set_callback_fun(self.callback_recv)
+
+        self.client.connect_to_server('127.0.0.1', 4444)
 
         # 加载飞机
         self.player_plane = self.game_resources.get_plane('Bf109', plane_type=PlaneType.FighterJet)
@@ -375,7 +392,6 @@ class FightingAircraftGame:
 
         self.game_render.load_map_xml(self.game_resources.get_map(5))
         self.map_size = self.game_render.get_map_size()
-        # self.player_plane.set_speed(0)
 
         # 解决输入法问题
         # 模拟按下 Shift 键
@@ -393,8 +409,10 @@ class FightingAircraftGame:
         while True:
             self.lock.acquire()
             self.render_delta_time = 0
+            if self.recv_server_signal:
+                self.fixed_update(delta_time=delta_time)  # 物理运算
+                self.recv_server_signal = False
             self.input_manager()  # 输入管理
-            self.fixed_update(delta_time=delta_time)  # 物理运算
             self.lock.release()
             delta_time = self.clock.tick(self.fps_physics)  # 获取时间差，控制帧率
             # delta_time = 0

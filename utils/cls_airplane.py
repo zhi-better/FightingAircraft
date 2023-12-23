@@ -77,7 +77,7 @@ class AirPlane(DynamicObject):
         self.pitch_attitude = 0.0
         self._pitch_modulation_factor = 0
         self.target_attitude = np.zeros((2,))
-        self.plane_state = InputState.NoInput
+        self.input_state = InputState.NoInput
         self.primary_weapon_reload_counter = 0
         self.secondary_weapon_reload_counter = 0
         self.map_size = np.array([])
@@ -124,10 +124,10 @@ class AirPlane(DynamicObject):
             ValueError('err attitude type: {}'.format(attitude_type))
 
     def roll(self):
-        self.plane_state = self.plane_state | InputState.Roll
+        self.input_state = self.input_state | InputState.Roll
 
     def pitch(self):
-        self.plane_state = self.plane_state | InputState.Pitch
+        self.input_state = self.input_state | InputState.Pitch
 
     def get_engine_temperature(self):
         return self._engine_temperature
@@ -159,7 +159,7 @@ class AirPlane(DynamicObject):
         """
         self._speed_modulation_factor = 1.1
         self.air_plane_params.engine_heat_rate += 0.2
-        self.plane_state = self.plane_state | InputState.SpeedUp
+        self.input_state = self.input_state | InputState.SpeedUp
 
     def slow_down(self):
         """
@@ -167,7 +167,7 @@ class AirPlane(DynamicObject):
         :return:
         """
         self._speed_modulation_factor = 0.7
-        self.plane_state = self.plane_state | InputState.SlowDown
+        self.input_state = self.input_state | InputState.SlowDown
 
     def set_speed(self, speed):
         """
@@ -205,10 +205,10 @@ class AirPlane(DynamicObject):
         return self.get_position() + _2d_velocity, direction_vector
 
     def primary_fire(self):
-        self.plane_state = self.plane_state | InputState.PrimaryWeaponAttack
+        self.input_state = self.input_state | InputState.PrimaryWeaponAttack
 
     def secondary_fire(self):
-        self.plane_state = self.plane_state | InputState.SecondaryWeaponAttack
+        self.input_state = self.input_state | InputState.SecondaryWeaponAttack
 
     def fixed_update(self, delta_time):
         """
@@ -219,7 +219,7 @@ class AirPlane(DynamicObject):
         # 首先调整控制飞机姿态
         # ---------------------------------------------
         # 横滚
-        if self.plane_state & InputState.Roll:
+        if self.input_state & InputState.Roll:
             if self._engine_temperature < 100:
                 # 滚动处理
                 if self.pitch_attitude == 0:
@@ -229,7 +229,7 @@ class AirPlane(DynamicObject):
 
         # ---------------------------------------------
         # 俯仰
-        if self.plane_state & InputState.Pitch:
+        if self.input_state & InputState.Pitch:
             if self._engine_temperature < 100:
                 # 俯仰
                 if self.roll_attitude == 0:
@@ -249,11 +249,11 @@ class AirPlane(DynamicObject):
 
         # ---------------------------------------------
         # 加减速
-        if self.plane_state & InputState.SpeedUp:
+        if self.input_state & InputState.SpeedUp:
             self.air_plane_params.engine_heat_rate += 0.3
             self.heat_counter = 0
             self._velocity_modulation_factor += 0.5
-        elif self.plane_state & InputState.SlowDown:
+        elif self.input_state & InputState.SlowDown:
             self._velocity_modulation_factor -= 0.3
         if self._velocity_modulation_factor > 0:
             if self._engine_temperature >= 100:
@@ -280,10 +280,10 @@ class AirPlane(DynamicObject):
         if self.pitch_attitude == 0:
             # 首先看一下当前的姿态，然后更新对应的姿态信息
             # 姿态正确才能更细对应的转向速度等信息
-            if self.plane_state & InputState.SharpTurnLeft:
+            if self.input_state & InputState.SharpTurnLeft:
                 if self._engine_temperature >= 100:
                     self.heat_counter = 0
-                    self.plane_state = self.plane_state | InputState.TurnLeft
+                    self.input_state = self.input_state | InputState.TurnLeft
                 else:
                     self.air_plane_params.engine_heat_rate += 0.5
                     if self.roll_attitude < 8:
@@ -295,10 +295,10 @@ class AirPlane(DynamicObject):
                         # self.reset_roll_attitude()
                         self.reset_attitude(attitude_type=AttitudeType.RollAttitude)
                     self.angular_velocity = self.air_plane_params.angular_speed * 2
-            elif self.plane_state & InputState.SharpTurnRight:
+            elif self.input_state & InputState.SharpTurnRight:
                 if self._engine_temperature >= 100:
                     self.heat_counter = 0
-                    self.plane_state = self.plane_state | InputState.TurnRight
+                    self.input_state = self.input_state | InputState.TurnRight
                 else:
                     self.air_plane_params.engine_heat_rate += 0.5
                     if self.roll_attitude == 0:
@@ -314,7 +314,7 @@ class AirPlane(DynamicObject):
                     self.angular_velocity = self.air_plane_params.angular_speed * -2
 
             # 普通转弯
-            if self.plane_state & InputState.TurnLeft:
+            if self.input_state & InputState.TurnLeft:
                 if self.roll_attitude < 2:
                     self._roll_modulation_factor = 1
                 elif self.roll_attitude >= 2:
@@ -324,7 +324,7 @@ class AirPlane(DynamicObject):
                     self.reset_attitude(attitude_type=AttitudeType.RollAttitude)
                     # self.reset_roll_attitude()
                 self.angular_velocity = self.air_plane_params.angular_speed
-            elif self.plane_state & InputState.TurnRight:
+            elif self.input_state & InputState.TurnRight:
                 if self.roll_attitude == 0:
                     self.roll_attitude = 36
                 if self.roll_attitude > 34:
@@ -364,7 +364,7 @@ class AirPlane(DynamicObject):
         self.heat_counter += 1
         self.air_plane_params.engine_heat_rate = 0
 
-        if self.plane_state & InputState.PrimaryWeaponAttack:
+        if self.input_state & InputState.PrimaryWeaponAttack:
             if self.primary_weapon_reload_counter <= 0:
                 self.primary_weapon_attack()
                 self.primary_weapon_reload_counter += self.air_plane_params.primary_weapon_reload_time
@@ -376,7 +376,7 @@ class AirPlane(DynamicObject):
             else:
                 self.primary_weapon_reload_counter -= delta_time * 0.001
 
-        if self.plane_state & InputState.SecondaryWeaponAttack:
+        if self.input_state & InputState.SecondaryWeaponAttack:
             if self.secondary_weapon_reload_counter <= 0:
                 self.secondary_weapon_attack()
                 self.secondary_weapon_reload_counter += self.air_plane_params.secondary_weapon_reload_time
@@ -390,7 +390,7 @@ class AirPlane(DynamicObject):
 
         # --------------------------------------------------------------------
         # 重置飞行状态
-        self.plane_state = InputState.NoInput
+        self.input_state = InputState.NoInput
 
         pos, direction_vector = self.move(delta_time=delta_time)
         self.direction_vector = direction_vector
@@ -409,16 +409,16 @@ class AirPlane(DynamicObject):
         print(f'take_damage: {damage}')
 
     def turn_left(self):
-        self.plane_state = self.plane_state | InputState.TurnLeft
+        self.input_state = self.input_state | InputState.TurnLeft
 
     def turn_right(self):
-        self.plane_state = self.plane_state | InputState.TurnRight
+        self.input_state = self.input_state | InputState.TurnRight
 
     def sharply_turn_left(self):
-        self.plane_state = self.plane_state | InputState.SharpTurnLeft
+        self.input_state = self.input_state | InputState.SharpTurnLeft
 
     def sharply_turn_right(self):
-        self.plane_state = self.plane_state | InputState.SharpTurnRight
+        self.input_state = self.input_state | InputState.SharpTurnRight
 
     def create_bullet(self, bullet_sprite, local_position, direction):
         new_bullet = Bullet()
