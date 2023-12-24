@@ -4,6 +4,7 @@ import xml.etree.ElementTree as ET
 import zlib
 
 import numpy as np
+import pygame
 import pygame as pg
 
 
@@ -47,7 +48,7 @@ class GameRender:
         :param y:
         :return:
         """
-
+        # position = np.array([rect.x, rect.y]) - 0.5*np.array([rect.width, rect.height])
         # 获取旋转后的矩形
         sprite = pg.transform.rotate(sprite, angle)
         # 此处有可能再地图边界由于分界线出现bug问题，需要额外处理
@@ -73,6 +74,10 @@ class GameRender:
                     0.5 * self.window_size[1] + b))
         # print('\r {}, {}'.format(a, b), end='')
         screen.blit(sprite, plane_rect)
+
+        # 创建一个充气的矩形，以便在原始矩形周围绘制边框
+        inflated_rect = plane_rect.inflate(4, 4)  # 边框大小为4像素
+        pygame.draw.rect(screen, (255, 0, 0), inflated_rect, 2)  # 绘制红色边框
 
     def render_map(self, position, screen):
         """

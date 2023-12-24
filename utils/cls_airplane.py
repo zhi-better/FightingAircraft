@@ -52,6 +52,7 @@ class AirPlaneSprites:
 
 class AirPlaneParams:
     def __init__(self):
+        self.name = 'AirPlane'
         self.health_points = 1000  # 生命值
         self.angular_speed = 0.8  # 转向速度
         self.speed = 0  # 正常运行速度
@@ -66,10 +67,10 @@ class AirPlaneParams:
 class AirPlane(DynamicObject):
     def __init__(self):
         super().__init__()
+        self.image_template = None
         self.air_plane_sprites = AirPlaneSprites()
         self.air_plane_params = AirPlaneParams()
         self._velocity_modulation_factor = 0
-        # self.angular_velocity = 0
         self._engine_temperature = 0
         self.heat_counter = 60
         self.roll_attitude = 0.0
@@ -81,8 +82,13 @@ class AirPlane(DynamicObject):
         self.primary_weapon_reload_counter = 0
         self.secondary_weapon_reload_counter = 0
         self.map_size = np.array([])
+        self.bullet_group = pygame.sprite.Group()
+        self.team_number = 0
 
-        self.bullet_list = []
+    def load_sprite(self, img_file_name):
+        self.image_template = pygame.image.load(img_file_name)
+
+        return self.image_template
 
     def get_air_plane_params(self):
         return self.air_plane_params
@@ -145,12 +151,12 @@ class AirPlane(DynamicObject):
             rect_dic = self.air_plane_sprites.pitch_mapping[int(self.pitch_attitude)]
         else:
             rect_dic = self.air_plane_sprites.pitch_mapping[int(0)]
-        # plane_rect = pygame.Rect(rect_dic['x'], rect_dic['y'], rect_dic['width'], rect_dic['height'])
-        # plane_sprite_subsurface = self.sprite.subsurface(plane_rect)
-        plane_sprite_subsurface = get_sprite_rect(self.sprite, rect_dic)
-        # self.sprite_attitude = pygame.transform.rotate(plane_sprite_subsurface, self.get_angle())
 
-        return plane_sprite_subsurface
+        self.image = get_rect_sprite(self.image_template, rect_dic)
+        rect = self.image.get_rect()
+        self.rect.width = rect.width
+        self.rect.height = rect.height
+        return self.image
 
     def speed_up(self):
         """
@@ -396,11 +402,11 @@ class AirPlane(DynamicObject):
         self.direction_vector = direction_vector
         self.set_position(pos)
 
-        for bullet in self.bullet_list:
+        for bullet in self.bullet_group:
             pos, _ = bullet.move(delta_time=delta_time)
             bullet.set_position(pos)
             if bullet.time_passed >= bullet.life_time:
-                self.bullet_list.remove(bullet)
+                self.bullet_group.remove(bullet)
                 # print('bullet removed. ')
 
         return self.get_position(), self.get_angle(self.direction_vector)
@@ -422,13 +428,13 @@ class AirPlane(DynamicObject):
 
     def create_bullet(self, bullet_sprite, local_position, direction):
         new_bullet = Bullet()
-        new_bullet.sprite = bullet_sprite
+        new_bullet.set_sprite(bullet_sprite)
         local_position[1] = np.cos(np.radians(self.roll_attitude * 10)) * local_position[1]
         new_bullet.set_position(local_to_world(
             self.get_position(), direction, local_point=local_position))
         new_bullet.set_speed(self.velocity + 3)
         new_bullet.set_direction_vector(direction)
-        self.bullet_list.append(new_bullet)
+        self.bullet_group.add(new_bullet)
 
     @abstractmethod
     def primary_weapon_attack(self):

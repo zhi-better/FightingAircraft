@@ -15,37 +15,56 @@ def local_to_world(local_position, direction_vector, local_point):
     return world_point
 
 
-def get_sprite_rect(sprite, rect_dic):
+def get_rect_sprite(sprite, rect_dic):
     plane_rect = pygame.Rect(rect_dic['x'], rect_dic['y'], rect_dic['width'], rect_dic['height'])
     plane_sprite_subsurface = sprite.subsurface(plane_rect)
 
     return plane_sprite_subsurface
 
-class StaticObject:
+
+class StaticObject(pygame.sprite.Sprite):
     def __init__(self):
+        # 调用父类的初始化方法
+        super().__init__()
         self._position = np.zeros((2,))
-        self.faction_mask = 0
-        self.sprite = None
+        self.rect = pygame.Rect(0, 0, 0, 0)
+        self.image = None
         self.collision_box = None
 
-    @abstractmethod
-    def update(self, delta_time):
-        pass
+    def update(self, *args, **kwargs):
+        """
+        更新
+        :param args:
+        :param kwargs:
+        :return:
+        """
+
+    def set_sprite(self, sprite):
+        rect = sprite.get_rect()
+        self.rect.width = rect.width
+        self.rect.height = rect.height
+        self.image = sprite
 
     def get_sprite(self):
-
-        return self.sprite
+        return self.image
 
     def load_sprite(self, img_file_name):
-        self.sprite = pygame.image.load(img_file_name)
-
-        return self.sprite
+        self.image = pygame.image.load(img_file_name)
+        self.rect = self.image.get_rect()
+        return self.image
 
     def set_position(self, vector_2d):
+        # 更新对应的 Sprite 的位置
+        self.rect.x = vector_2d[0]
+        self.rect.y = vector_2d[1]
         self._position = vector_2d
+
+    def get_rect(self):
+        return self.rect
 
     def get_position(self):
         return self._position
+
 
 class DynamicObject(StaticObject):
     def __init__(self):
@@ -85,9 +104,6 @@ class DynamicObject(StaticObject):
     def set_direction_vector(self, vector_2d):
         vector_2d = vector_2d / np.linalg.norm(vector_2d)
         self.direction_vector = vector_2d
-
-    def update(self, delta_time):
-        pass
 
     def get_angle(self, direction_vector):
         """

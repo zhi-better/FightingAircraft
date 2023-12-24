@@ -11,8 +11,7 @@ class Bullet(DynamicObject):
         self.time_passed = 0
 
     def get_sprite(self):
-
-        return self.sprite
+        return self.image
 
     def move(self, delta_time):
         self.time_passed += delta_time
