@@ -50,13 +50,17 @@ class StaticObject(pygame.sprite.Sprite):
 
     def load_sprite(self, img_file_name):
         self.image = pygame.image.load(img_file_name)
-        self.rect = self.image.get_rect()
+        rect = self.image.get_rect()
+        self.rect.width = rect.width
+        self.rect.height = rect.height
         return self.image
 
     def set_position(self, vector_2d):
         # 更新对应的 Sprite 的位置
-        self.rect.x = vector_2d[0]
-        self.rect.y = vector_2d[1]
+        # self.rect.x = vector_2d[0]
+        # self.rect.y = vector_2d[1]
+        self.rect.x = vector_2d[0] - 0.5 * self.rect.width
+        self.rect.y = vector_2d[1] - 0.5 * self.rect.height
         self._position = vector_2d
 
     def get_rect(self):

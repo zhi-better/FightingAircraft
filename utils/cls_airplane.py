@@ -153,6 +153,7 @@ class AirPlane(DynamicObject):
             rect_dic = self.air_plane_sprites.pitch_mapping[int(0)]
 
         self.image = get_rect_sprite(self.image_template, rect_dic)
+        self.image = pygame.transform.rotate(self.image, self.get_angle(self.direction_vector))
         rect = self.image.get_rect()
         self.rect.width = rect.width
         self.rect.height = rect.height

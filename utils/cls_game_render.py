@@ -41,7 +41,7 @@ class GameRender:
             tile_rect = pg.Rect(0, 0, 0, 0)
         return tile_rect
 
-    def render_object(self, sprite, position, angle, screen):
+    def render_object(self, sprite, position, angle, screen, rect=None):
         """
         渲染大地图中 x y 位置的目标物体
         :param x:
@@ -50,7 +50,7 @@ class GameRender:
         """
         # position = np.array([rect.x, rect.y]) - 0.5*np.array([rect.width, rect.height])
         # 获取旋转后的矩形
-        sprite = pg.transform.rotate(sprite, angle)
+        # sprite = pg.transform.rotate(sprite, angle)
         # 此处有可能再地图边界由于分界线出现bug问题，需要额外处理
         right_down_threshold = self.map_size - 0.5 * self.window_size
         left_top_threshold = 0.5 * self.window_size
@@ -60,7 +60,7 @@ class GameRender:
         elif (self.view_position[0] > right_down_threshold[0]
                 and position[0] < left_top_threshold[0]):
             position[0] += self.map_size[0]
-        elif (position[1] > right_down_threshold[1]
+        if (position[1] > right_down_threshold[1]
                 and self.view_position[1] < left_top_threshold[0]):
             position[1] -= self.map_size[1]
         elif (self.view_position[1] > right_down_threshold[1]
@@ -75,9 +75,12 @@ class GameRender:
         # print('\r {}, {}'.format(a, b), end='')
         screen.blit(sprite, plane_rect)
 
-        # 创建一个充气的矩形，以便在原始矩形周围绘制边框
-        inflated_rect = plane_rect.inflate(4, 4)  # 边框大小为4像素
-        pygame.draw.rect(screen, (255, 0, 0), inflated_rect, 2)  # 绘制红色边框
+        if rect:
+            plane_rect.x = rect.x - self.view_position[0] + 0.5 * self.window_size[0]
+            plane_rect.y = rect.y - self.view_position[1] + 0.5 * self.window_size[1]
+            # 创建一个充气的矩形，以便在原始矩形周围绘制边框
+            inflated_rect = plane_rect.inflate(2,2)  # 边框大小为4像素
+            pygame.draw.rect(screen, (255, 0, 0), inflated_rect, 2)  # 绘制红色边框
 
     def render_map(self, position, screen):
         """

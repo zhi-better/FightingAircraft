@@ -288,7 +288,7 @@ class FightingAircraftGame:
         pg.init()  # 初始化pg
         self.screen = pg.display.set_mode(self.game_window_size)  # 显示窗口
         pg.display.set_caption(self.game_name)
-        self.fps_render = 30
+        self.fps_render = 60
         # 网络设置
         self.client.set_callback_fun(self.callback_recv)
         self.recv_server_signal = True
@@ -299,8 +299,10 @@ class FightingAircraftGame:
         self.map_size = self.game_render.get_map_size()
         # 加载飞机
         self.player_plane = self.game_resources.get_plane('Bf109', plane_type=PlaneType.FighterJet)
+        self.player_plane.set_position(np.array([2000, 2000]))
         self.player_plane.team_number = 1
         plane = self.game_resources.get_plane('F3F', plane_type=PlaneType.FighterJet)
+        plane.set_position(np.array([2000, 1900]))
         plane.team_number = 2
         self.team1_group.add(self.player_plane)
         self.team2_group.add(plane)
@@ -329,6 +331,12 @@ class FightingAircraftGame:
             delta_time = self.clock.tick(self.fps_physics)  # 获取时间差，控制帧率
             # 实际物理运行每次都要保证是相同的时间
             delta_time = 30
+
+    def check_and_reset_position(self, pos):
+        pos[0] = pos[0] % self.map_size[0]
+        pos[1] = pos[1] % self.map_size[1]
+
+        return pos
 
     def callback_recv(self, data):
         self.recv_server_signal = True
@@ -395,15 +403,11 @@ class FightingAircraftGame:
         """
         for plane in self.all_planes_group:
             pos, _ = plane.fixed_update(delta_time=delta_time)
-            pos[0] = pos[0] % self.map_size[0]
-            pos[1] = pos[1] % self.map_size[1]
-            plane.set_position(pos)
+            plane.set_position(self.check_and_reset_position(pos))
             # 所有发射的弹药也得 move
             for bullet in plane.bullet_group:
                 pos = bullet.get_position()
-                pos[0] = pos[0] % self.map_size[0]
-                pos[1] = pos[1] % self.map_size[1]
-                bullet.set_position(pos)
+                bullet.set_position(self.check_and_reset_position(pos))
             # 进行碰撞检测
             crashed = {}
             if plane.team_number == 1:
@@ -424,6 +428,8 @@ class FightingAircraftGame:
         print('render thread started. ')
         delta_time = 1 / self.fps_render
         self.render_delta_time = 0
+        font = pg.font.Font(None, 36)
+
         while True:
             self.lock.acquire()
             self.render_delta_time += delta_time
@@ -432,23 +438,22 @@ class FightingAircraftGame:
             self.screen.fill((255, 255, 255))
             pos, dir_v = self.player_plane.move(delta_time=self.render_delta_time)
             self.game_render.render_map(pos, screen=self.screen)
-
+            text = font.render(
+                'Engine temperature: {:.2f}, Speed: {:.2f}, position: [{:.2f}, {:.2f}], dir_vector: [{:.2f}, {:.2f}]'.format(
+                    self.player_plane.get_engine_temperature(), self.player_plane.velocity,
+                    pos[0], pos[1], dir_v[0], dir_v[1]),
+                True, (0, 0, 0))
             for plane in self.all_planes_group:
                 pos, dir_v = plane.move(delta_time=self.render_delta_time)
                 self.game_render.render_object(
                     plane.get_sprite(), pos,
-                    angle=plane.get_angle(direction_vector=dir_v), screen=self.screen)
+                    angle=plane.get_angle(direction_vector=dir_v), screen=self.screen, rect=plane.get_rect())
                 # print('\r obj count: {}'.format(len(self.player_plane.bullet_list)), end='')
                 for bullet in plane.bullet_group:
                     self.game_render.render_object(
                         bullet.get_sprite(), bullet.get_position(),
-                        angle=bullet.get_angle(bullet.direction_vector), screen=self.screen)
+                        angle=bullet.get_angle(bullet.direction_vector), screen=self.screen, rect=bullet.get_rect())
 
-            font = pg.font.Font(None, 36)
-            text = font.render('Engine temperature: {:.2f}, Speed: {:.2f}, position: [{:.2f}, {:.2f}], dir_vector: [{:.2f}, {:.2f}]'.format(
-                self.player_plane.get_engine_temperature(), self.player_plane.velocity,
-                pos[0], pos[1], dir_v[0], dir_v[1]),
-                True, (0, 0, 0))
             # 将文本绘制到屏幕上
             self.screen.blit(text, (10, 10))
             pg.display.flip()  # 更新全部显示
