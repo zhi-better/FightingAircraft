@@ -401,19 +401,28 @@ class AirPlane(DynamicObject):
 
         pos, direction_vector = self.move(delta_time=delta_time)
         self.direction_vector = direction_vector
-        self.set_position(pos)
+        # self.set_position(pos)
 
-        for bullet in self.bullet_group:
-            pos, _ = bullet.move(delta_time=delta_time)
-            bullet.set_position(pos)
-            if bullet.time_passed >= bullet.life_time:
-                self.bullet_group.remove(bullet)
+        # for bullet in self.bullet_group:
+        #     pos, _ = bullet.move(delta_time=delta_time)
+        #     bullet.set_position(pos)
+        #     if bullet.time_passed >= bullet.life_time:
+        #         self.bullet_group.remove(bullet)
                 # print('bullet removed. ')
 
-        return self.get_position(), self.get_angle(self.direction_vector)
+        return pos, self.get_angle(self.direction_vector)
 
     def take_damage(self, damage):
-        print(f'take_damage: {damage}')
+        health = self.air_plane_params.health_points
+        health -= damage
+        # print(f'take_damage: {damage}')
+        self.air_plane_params.health_points = health
+        if health <= 0:
+            health = 1000
+            return True
+        else:
+            return False
+
 
     def turn_left(self):
         self.input_state = self.input_state | InputState.TurnLeft
@@ -434,7 +443,9 @@ class AirPlane(DynamicObject):
         new_bullet.set_position(local_to_world(
             self.get_position(), direction, local_point=local_position))
         new_bullet.set_speed(self.velocity + 3)
+        new_bullet.set_map_size(self.get_map_size())
         new_bullet.set_direction_vector(direction)
+        new_bullet.damage = 10
         self.bullet_group.add(new_bullet)
 
     @abstractmethod

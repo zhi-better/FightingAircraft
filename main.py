@@ -247,6 +247,7 @@ class GameResources:
 
 class FightingAircraftGame:
     def __init__(self):
+        global GAME_MAP_WIDTH, GAME_MAP_HEIGHT
         self.game_name = "FightingAircraft"
         self.game_window_size = 1080, 720  # 设置窗口大小
         self.clock = pg.time.Clock()
@@ -288,21 +289,23 @@ class FightingAircraftGame:
         pg.init()  # 初始化pg
         self.screen = pg.display.set_mode(self.game_window_size)  # 显示窗口
         pg.display.set_caption(self.game_name)
-        self.fps_render = 60
+        self.fps_render = 30
         # 网络设置
         self.client.set_callback_fun(self.callback_recv)
         self.recv_server_signal = True
         # self.client.connect_to_server('127.0.0.1', 4444)
         # 加载地图
-        self.game_render.window_size = np.array(self.game_window_size).reshape((2,))
+        self.game_render.game_window_size = np.array(self.game_window_size).reshape((2,))
         self.game_render.load_map_xml(self.game_resources.get_map(5))
         self.map_size = self.game_render.get_map_size()
         # 加载飞机
         self.player_plane = self.game_resources.get_plane('Bf109', plane_type=PlaneType.FighterJet)
+        self.player_plane.set_map_size(self.map_size)
         self.player_plane.set_position(np.array([2000, 2000]))
         self.player_plane.team_number = 1
         plane = self.game_resources.get_plane('F3F', plane_type=PlaneType.FighterJet)
-        plane.set_position(np.array([2000, 1900]))
+        plane.set_position(np.array([2000, 1700]))
+        plane.set_map_size(self.map_size)
         plane.team_number = 2
         self.team1_group.add(self.player_plane)
         self.team2_group.add(plane)
@@ -406,8 +409,10 @@ class FightingAircraftGame:
             plane.set_position(self.check_and_reset_position(pos))
             # 所有发射的弹药也得 move
             for bullet in plane.bullet_group:
-                pos = bullet.get_position()
+                pos, _ = bullet.move(delta_time=delta_time)
                 bullet.set_position(self.check_and_reset_position(pos))
+                if bullet.time_passed >= bullet.life_time:
+                    plane.bullet_group.remove(bullet)
             # 进行碰撞检测
             crashed = {}
             if plane.team_number == 1:
@@ -421,7 +426,8 @@ class FightingAircraftGame:
 
             if len(crashed):
                 for bullet in crashed:
-                    print('plane: {} is crushed. '.format(crashed[bullet][0].air_plane_params.name))
+                    if crashed[bullet][0].take_damage(bullet.damage):
+                        print('enemy eliminated. ')
                     plane.bullet_group.remove(bullet)
 
     def render(self):
@@ -446,19 +452,18 @@ class FightingAircraftGame:
             for plane in self.all_planes_group:
                 pos, dir_v = plane.move(delta_time=self.render_delta_time)
                 self.game_render.render_object(
-                    plane.get_sprite(), pos,
-                    angle=plane.get_angle(direction_vector=dir_v), screen=self.screen, rect=plane.get_rect())
+                    plane, pos, screen=self.screen, draw_collision_box=True)
                 # print('\r obj count: {}'.format(len(self.player_plane.bullet_list)), end='')
                 for bullet in plane.bullet_group:
                     self.game_render.render_object(
-                        bullet.get_sprite(), bullet.get_position(),
-                        angle=bullet.get_angle(bullet.direction_vector), screen=self.screen, rect=bullet.get_rect())
+                        bullet, bullet.get_position(), screen=self.screen, draw_collision_box=True)
 
             # 将文本绘制到屏幕上
             self.screen.blit(text, (10, 10))
             pg.display.flip()  # 更新全部显示
             self.lock.release()
             delta_time = self.clock_render.tick(self.fps_render)
+            # delta_time = 30
 
 
 if __name__ == '__main__':

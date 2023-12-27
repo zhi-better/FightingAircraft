@@ -1,5 +1,4 @@
 from abc import abstractmethod
-
 import numpy as np
 import pygame
 
@@ -31,6 +30,14 @@ class StaticObject(pygame.sprite.Sprite):
         self.image = None
         self.collision_box = None
 
+        self._map_size = np.array([0, 0])
+
+    def set_map_size(self, map_size):
+        self._map_size = map_size
+
+    def get_map_size(self):
+        return self._map_size
+
     def update(self, *args, **kwargs):
         """
         更新
@@ -61,6 +68,10 @@ class StaticObject(pygame.sprite.Sprite):
         # self.rect.y = vector_2d[1]
         self.rect.x = vector_2d[0] - 0.5 * self.rect.width
         self.rect.y = vector_2d[1] - 0.5 * self.rect.height
+        if self.rect.x < 0:
+            self.rect.x += self._map_size[0]
+        if self.rect.y < 0:
+            self.rect.y += self._map_size[1]
         self._position = vector_2d
 
     def get_rect(self):
