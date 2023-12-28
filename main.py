@@ -1,5 +1,7 @@
 import base64
+import json
 import os
+import random
 import struct
 import sys
 import threading
@@ -18,6 +20,13 @@ import numpy as np
 from utils.SocketTcpTools import *
 from utils.cls_airplane import *
 from utils.cls_game_render import *
+
+class CommandType(Enum):
+    cmd_login = 1
+    cmd_login_resp = 2
+    cmd_matching_successful = 3
+    cmd_player_action = 4
+    cmd_frame_update = 4
 
 
 class GameSprite(pygame.sprite.Sprite):
@@ -236,7 +245,7 @@ class GameResources:
         plane.air_plane_sprites.roll_mapping = roll_mapping
         plane.air_plane_sprites.pitch_mapping = pitch_mapping
         # 设置主武器和副武器的贴图资源
-        sprite, rect = self.get_bullet_sprite('bullet' + str(param['mainweapon']+1))
+        sprite, rect = self.get_bullet_sprite('bullet' + str(param['mainweapon'] + 1))
         plane.air_plane_sprites.primary_bullet_sprite = get_rect_sprite(rect, sprite)
         sprite, rect = self.get_bullet_sprite('bullet' + str(param['secondweapon']))
         plane.air_plane_sprites.secondary_bullet_sprite = get_rect_sprite(rect, sprite)
@@ -247,7 +256,7 @@ class GameResources:
 
 class FightingAircraftGame:
     def __init__(self):
-        global GAME_MAP_WIDTH, GAME_MAP_HEIGHT
+        self.player_id = 0
         self.game_name = "FightingAircraft"
         self.game_window_size = 1080, 720  # 设置窗口大小
         self.clock = pg.time.Clock()
@@ -274,26 +283,18 @@ class FightingAircraftGame:
                            pg.K_a: False,
                            pg.K_s: False,
                            pg.K_d: False}
-
         self.lock = threading.RLock()  # 线程锁，保证渲染和物理运算的顺序
         self.clock_render = pg.time.Clock()  # 渲染线程的时钟
         self.thread_render = threading.Thread(target=self.render, daemon=True)
         self.render_delta_time = 0
         self.recv_server_signal = False
 
+        # 为了便于更新内容，创建了三个组，分别是：所有飞机，敌方飞机，我方飞机
         self.all_planes_group = pygame.sprite.Group()
         self.team1_group = pygame.sprite.Group()
         self.team2_group = pygame.sprite.Group()
 
     def run_game(self):
-        pg.init()  # 初始化pg
-        self.screen = pg.display.set_mode(self.game_window_size)  # 显示窗口
-        pg.display.set_caption(self.game_name)
-        self.fps_render = 30
-        # 网络设置
-        self.client.set_callback_fun(self.callback_recv)
-        self.recv_server_signal = True
-        # self.client.connect_to_server('127.0.0.1', 4444)
         # 加载地图
         self.game_render.game_window_size = np.array(self.game_window_size).reshape((2,))
         self.game_render.load_map_xml(self.game_resources.get_map(5))
@@ -310,13 +311,6 @@ class FightingAircraftGame:
         self.team1_group.add(self.player_plane)
         self.team2_group.add(plane)
         self.all_planes_group.add(self.team1_group, self.team2_group)
-        # 解决输入法问题
-        # 模拟按下 Shift 键
-        pyautogui.keyDown('shift')
-        # 在这里可以添加一些程序逻辑，模拟按下 Shift 键后的操作
-        # time.sleep(1)  # 为了演示，这里等待1秒
-        # 松开 Shift 键
-        pyautogui.keyUp('shift')
 
         # 设置渲染线程为子线程
         self.thread_render.start()
@@ -335,17 +329,41 @@ class FightingAircraftGame:
             # 实际物理运行每次都要保证是相同的时间
             delta_time = 30
 
-    def check_and_reset_position(self, pos):
-        pos[0] = pos[0] % self.map_size[0]
-        pos[1] = pos[1] % self.map_size[1]
+    def init_game(self):
+        pg.init()  # 初始化pg
+        self.screen = pg.display.set_mode(self.game_window_size)  # 显示窗口
+        pg.display.set_caption(self.game_name)
+        self.fps_render = 30
+        # 解决输入法问题
+        # 模拟按下 Shift 键
+        pyautogui.keyDown('shift')
+        # 松开 Shift 键
+        pyautogui.keyUp('shift')
 
-        return pos
-
-    def callback_recv(self, data):
+        # 连接网络并发送匹配请求
+        self.client.set_callback_fun(self.callback_recv)
         self.recv_server_signal = True
-        self.player_plane.input_state = InputState(int.from_bytes(data, byteorder='big'))
-        # print('\r{}'.format(data), end='')
-        # print(data)
+        self.client.connect_to_server('172.21.194.105', 4444)
+        data = {
+            "command": CommandType.cmd_login.value,
+            "player_id": self.player_id,
+            "plane_name": random.choice(list(self.game_resources.airplane_info_map.keys()))
+        }
+        self.client.send(json.dumps(data), data_type=DataType.TypeString, pack_data=True)
+
+        while True:
+            self.clock.tick(self.fps_physics)  # 获取时间差，控制帧率
+
+    def callback_recv(self, data, tcp_client):
+        data = json.loads(data.decode())
+        cmd = CommandType(data['command'])
+        if cmd == CommandType.cmd_login_resp:
+            self.player_id = data['player_id']
+        elif cmd == CommandType.cmd_matching_successful:
+            print('matching successfully. ')
+        elif cmd == CommandType.cmd_frame_update:
+            print(data)
+
 
     def input_manager(self):
         # 处理输入
@@ -395,8 +413,14 @@ class FightingAircraftGame:
             # start_point[0] += step
             self.player_plane.secondary_fire()
 
-        self.client.send(self.player_plane.input_state.to_bytes(2, 'big'),
-                         pack_data=True, data_type=DataType.TypeBinary)
+        data = {
+            "command": "user_action",
+            "match_id": 0,
+            "player_id": str(self.player_id),
+            "action": str(self.player_plane.input_state)
+        }
+
+        self.client.send(json.dumps(data), pack_data=True, data_type=DataType.TypeString)
 
     def fixed_update(self, delta_time):
         """
@@ -406,11 +430,11 @@ class FightingAircraftGame:
         """
         for plane in self.all_planes_group:
             pos, _ = plane.fixed_update(delta_time=delta_time)
-            plane.set_position(self.check_and_reset_position(pos))
+            plane.set_position(pos)
             # 所有发射的弹药也得 move
             for bullet in plane.bullet_group:
                 pos, _ = bullet.move(delta_time=delta_time)
-                bullet.set_position(self.check_and_reset_position(pos))
+                bullet.set_position(pos)
                 if bullet.time_passed >= bullet.life_time:
                     plane.bullet_group.remove(bullet)
             # 进行碰撞检测
@@ -468,4 +492,4 @@ class FightingAircraftGame:
 
 if __name__ == '__main__':
     game = FightingAircraftGame()
-    game.run_game()
+    game.init_game()

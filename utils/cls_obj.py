@@ -64,14 +64,15 @@ class StaticObject(pygame.sprite.Sprite):
 
     def set_position(self, vector_2d):
         # 更新对应的 Sprite 的位置
-        # self.rect.x = vector_2d[0]
-        # self.rect.y = vector_2d[1]
+        vector_2d[0] = vector_2d[0] % self._map_size[0]
+        vector_2d[1] = vector_2d[1] % self._map_size[1]
         self.rect.x = vector_2d[0] - 0.5 * self.rect.width
         self.rect.y = vector_2d[1] - 0.5 * self.rect.height
         if self.rect.x < 0:
             self.rect.x += self._map_size[0]
         if self.rect.y < 0:
             self.rect.y += self._map_size[1]
+
         self._position = vector_2d
 
     def get_rect(self):

@@ -1,37 +1,116 @@
+import json
 import time
 
 import pygame
 
+from main import CommandType
 from utils.SocketTcpTools import *
 from utils.cls_airplane import *
 
-global_data = InputState.NoInput.to_bytes(2, 'big')
+
+def get_ipv4_address():
+    try:
+        # 获取主机名
+        host_name = socket.gethostname()
+
+        # 获取主机名对应的 IPv4 地址
+        ip_address = socket.gethostbyname(host_name)
+
+        return ip_address
+    except socket.error as e:
+        print(f"Error occurred: {e}")
+        return None
 
 
-def server_callback(data):
-    """
-    服务器的处理函数
-    :param data:
-    :return:
-    """
-    global global_data
-    global_data = data
-    # print(data)
+class PlayerIDAllocator:
+    def __init__(self):
+        self.next_available_id = 1
+        self.used_ids = set()
+
+    def allocate_player_id(self):
+        # 分配玩家 ID
+        player_id = self.next_available_id
+        self.used_ids.add(player_id)
+
+        # 更新下一个可用的 ID
+        while self.next_available_id in self.used_ids:
+            self.next_available_id += 1
+
+        return player_id
+
+    def release_player_id(self, player_id):
+        # 释放玩家 ID
+        if player_id in self.used_ids:
+            self.used_ids.remove(player_id)
+
+    def get_next_available_id(self):
+        # 获取下一个可用的 ID，不分配
+        return self.next_available_id
+
+
+class FightingAircraftGameServer:
+    def __init__(self):
+        self.server = TcpSererTools(get_ipv4_address(), port=4444)
+        self.server.start()
+        self.server.set_callback_fun(self.server_callback)
+        self.clock = pygame.time.Clock()
+        self.allocator = PlayerIDAllocator()
+        self.player_map = {}
+        self.update_frame_data = {"command": CommandType.cmd_frame_update.value,
+                                  'timestamp': 0,
+                                  "actions": []}
+
+        while True:
+            self.clock.tick(30)  # 获取时间差，控制帧率
+
+    def server_callback(self, data, tcp_client):
+        """
+        服务器的处理函数
+        :param data:
+        :return:
+        """
+        data = json.loads(data.decode())
+        cmd = CommandType(data['command'])
+        data = {}
+        if cmd == CommandType.cmd_login:
+            data['command'] = CommandType.cmd_login_resp.value
+            data['player_id'] = self.allocator.allocate_player_id()
+
+            # 保存玩家和对应的发送端口
+            self.player_map[data['player_id']] = tcp_client
+            self.server.send(tcp_client, data=json.dumps(data), pack_data=True, data_type=DataType.TypeString)
+
+            if len(self.player_map.keys()) >= 1:
+                start_data = {"command": CommandType.cmd_matching_successful.value,
+                              'timestamp': 0,
+                              "planes": []}
+                for key in self.player_map.keys():
+                    start_data["planes"].append({"player_id": key, "position_x": 1000, "position_y": 1000})
+
+                for client in self.server.tcp_clients:
+                    self.server.send(client,
+                                data=json.dumps(self.update_frame_data),
+                                pack_data=True,
+                                data_type=DataType.TypeString)
+
+                    # 启动服务器
+                    self.server_start()
+        elif cmd == CommandType.cmd_player_action:
+            action_data = {'player_id': data['player_id'], 'action': data['action']}
+            self.update_frame_data["actions"].append(action_data)
+
+    def server_start(self):
+        while True:
+            # 保证服务器以 30FPS 的速度转播玩家操作
+            self.clock.tick(30)
+
+            for client in self.server.tcp_clients:
+                self.server.send(client, data=json.dumps(self.update_frame_data), pack_data=True,
+                            data_type=DataType.TypeString)
+            # 清空用户操作，更新时间戳
+            self.update_frame_data["actions"].clear()
+            self.update_frame_data['timestamp'] += 1
 
 
 if __name__ == '__main__':
-    server = TcpSererTools('127.0.0.1', port=4444)
-    server.start()
-    server.set_callback_fun(server_callback)
-    clock = pygame.time.Clock()
-
-    while True:
-        # 保证服务器以 30FPS 的速度转播玩家操作
-        clock.tick(30)
-
-        for client in server.tcp_clients:
-            server.send(client, data=global_data, pack_data=True, data_type=DataType.TypeBinary)
-
-
-
-
+    server = FightingAircraftGameServer()

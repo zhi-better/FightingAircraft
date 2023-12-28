@@ -86,7 +86,7 @@ class TcpBaseTools:
         else:
             return False, None
 
-    def process_raw_data(self, recv_data):
+    def process_raw_data(self, recv_data, tcp_client):
         """
         处理接收到的原始数据，核心代码
         :param recv_data:
@@ -119,7 +119,7 @@ class TcpBaseTools:
             if self.frame_info.data_recv_length >= self.frame_info.data_all_length:
                 # 根据回调函数返回对应的内容
                 if self.callback_fun is not None:
-                    self.callback_fun(self.frame_info.data_buffer)
+                    self.callback_fun(self.frame_info.data_buffer, tcp_client)
                 else:
                     print('no callback function, recv data: {}'.format(self.frame_info.data_buffer))
                 # 从剩余的数据中尝试检索出对应的数据头
@@ -128,7 +128,7 @@ class TcpBaseTools:
                 self.frame_info.reset()
                 recv_data = recv_data[recv_len_real:len(recv_data)]
                 if len(recv_data) != 0:
-                    self.process_raw_data(recv_data)
+                    self.process_raw_data(recv_data, tcp_client)
             else:
                 return
             # 从剩余的数据中尝试解析数据头
@@ -142,7 +142,7 @@ class TcpBaseTools:
                     # 此处还得继续判断当前是否转换完了，如果没有的话需要继续转换接收到的内容
                     recv_data = recv_data[self.header_length:len(recv_data)]
                     if len(recv_data) != 0:
-                        self.process_raw_data(recv_data)
+                        self.process_raw_data(recv_data, tcp_client)
                 else:
                     print(recv_data)
             else:
@@ -191,7 +191,7 @@ class TcpBaseTools:
                 return
 
             # 另外编写函数处理对应的内容
-            self.process_raw_data(recv_data)
+            self.process_raw_data(recv_data, tcp_client)
 
 
 class TcpSererTools(TcpBaseTools):
@@ -262,6 +262,7 @@ class TcpSererTools(TcpBaseTools):
     def send(self, tcp_socket, data, pack_data=False, data_type=DataType.TypeNone):
         """
         向客户端发送数据
+        :param data_type:
         :param pack_data:
         :param tcp_socket:
         :param data:
@@ -272,9 +273,10 @@ class TcpSererTools(TcpBaseTools):
         try:
             if tcp_socket:
                 tcp_socket.send(data)
-        except OSError as e:
+        except Exception as e:
+            self.tcp_clients.remove(tcp_socket)
             tcp_socket.close()
-            self.tcp_socket = None
+            # self.tcp_socket = None
             print(e)
 
 class TcpClientTools(TcpBaseTools):
