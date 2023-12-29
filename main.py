@@ -392,8 +392,9 @@ class FightingAircraftGame:
                     self.id_plane_mapping[plane_info['player_id']] = self.player_plane
                 else:
                     new_plane = self.game_resources.get_plane(plane_info['plane_name'], plane_type=PlaneType.FighterJet)
-                    new_plane.set_position(np.array([plane_info['position_x'], plane_info['position_y']]))
                     new_plane.set_map_size(self.map_size)
+                    new_plane.set_position(np.array([plane_info['position_x'], plane_info['position_y']]))
+
                     new_plane.team_number = 2
                     self.team2_group.add(new_plane)
                     self.id_plane_mapping[plane_info['player_id']] = new_plane
