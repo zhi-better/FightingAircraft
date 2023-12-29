@@ -7,6 +7,7 @@ import sys
 import threading
 import zlib
 import asyncio
+from typing import Dict
 
 import pyautogui
 import pygame as pg
@@ -22,6 +23,7 @@ from utils.cls_airplane import *
 from utils.cls_game_render import *
 
 class CommandType(Enum):
+    cmd_none = 0
     cmd_login = 1
     cmd_login_resp = 2
     cmd_matching_successful = 3
@@ -257,6 +259,8 @@ class GameResources:
 class FightingAircraftGame:
     def __init__(self):
         self.player_id = 0
+        self.local_time_stamp = 0
+        self.update_frames = []
         self.game_name = "FightingAircraft"
         self.game_window_size = 1080, 720  # 设置窗口大小
         self.clock = pg.time.Clock()
@@ -288,48 +292,19 @@ class FightingAircraftGame:
         self.thread_render = threading.Thread(target=self.render, daemon=True)
         self.render_delta_time = 0
         self.recv_server_signal = False
+        self.is_game_ready = False
 
         # 为了便于更新内容，创建了三个组，分别是：所有飞机，敌方飞机，我方飞机
-        self.all_planes_group = pygame.sprite.Group()
+        # self.all_planes_group = pygame.sprite.Group()
+        self.id_plane_mapping: Dict[int, AirPlane] = {}
         self.team1_group = pygame.sprite.Group()
         self.team2_group = pygame.sprite.Group()
 
-    def run_game(self):
-        # 加载地图
-        self.game_render.game_window_size = np.array(self.game_window_size).reshape((2,))
-        self.game_render.load_map_xml(self.game_resources.get_map(5))
-        self.map_size = self.game_render.get_map_size()
-        # 加载飞机
-        self.player_plane = self.game_resources.get_plane('Bf109', plane_type=PlaneType.FighterJet)
-        self.player_plane.set_map_size(self.map_size)
-        self.player_plane.set_position(np.array([2000, 2000]))
-        self.player_plane.team_number = 1
-        plane = self.game_resources.get_plane('F3F', plane_type=PlaneType.FighterJet)
-        plane.set_position(np.array([2000, 1700]))
-        plane.set_map_size(self.map_size)
-        plane.team_number = 2
-        self.team1_group.add(self.player_plane)
-        self.team2_group.add(plane)
-        self.all_planes_group.add(self.team1_group, self.team2_group)
-
-        # 设置渲染线程为子线程
-        self.thread_render.start()
-
-        delta_time = 1 / self.fps_physics
-        # 此处只有物理运行，关于图形渲染是一个新的单独的线程
-        while True:
-            self.lock.acquire()
-            self.render_delta_time = 0
-            if self.recv_server_signal:
-                self.fixed_update(delta_time=delta_time)  # 物理运算
-                # self.recv_server_signal = False
-            self.input_manager()  # 输入管理
-            self.lock.release()
-            delta_time = self.clock.tick(self.fps_physics)  # 获取时间差，控制帧率
-            # 实际物理运行每次都要保证是相同的时间
-            delta_time = 30
-
     def init_game(self):
+        """
+        初始化游戏的一些必要组件，例如网络和资源加载
+        :return:
+        """
         pg.init()  # 初始化pg
         self.screen = pg.display.set_mode(self.game_window_size)  # 显示窗口
         pg.display.set_caption(self.game_name)
@@ -349,26 +324,91 @@ class FightingAircraftGame:
             "player_id": self.player_id,
             "plane_name": random.choice(list(self.game_resources.airplane_info_map.keys()))
         }
-        self.client.send(json.dumps(data), data_type=DataType.TypeString, pack_data=True)
+        self.client.send(json.dumps(data), pack_data=True, data_type=DataType.TypeString)
+        # self.client.send(json.dumps({'command': CommandType.cmd_none.value}), pack_data=True, data_type=DataType.TypeString)
+
+        clk = pg.time.Clock()
 
         while True:
+            self.input_manager()  # 输入管理
+            if self.is_game_ready:
+                # 当接收到游戏开始的信息后进入到运行游戏的函数
+                self.run_game()
+            else:
+                self.screen.fill((255, 255, 255))
+                pg.display.flip()  # 更新全部显示
+                # self.client.send(json.dumps({'command': CommandType.cmd_none.value}), pack_data=True,data_type=DataType.TypeString)
+
+            clk.tick(self.fps_physics)  # 获取时间差，控制帧率
+
+    def run_game(self):
+        """
+        运行主游戏逻辑：
+        针对网络发送的运行数据，本地接收时间是不固定的，但是必须要用固定的时间间隔去运行这些不固定间隔的数据
+        :return:
+        """
+        # 设置渲染线程为子线程
+        self.thread_render.start()
+        delta_time = 1000 / self.fps_physics   # 物理运行的速度应该是固定的服务器的间隔
+
+        # 此处只有物理运行，关于图形渲染是一个新的单独的线程
+        while self.is_game_ready:
+            self.lock.acquire()
+            # 首先要刷新渲染的起始时间
+            self.render_delta_time = 0
+            # 运行完毕所有的在这段时间内接收到的数据帧
+            for frame in self.update_frames:
+                if frame['time_stamp'] >= self.local_time_stamp:
+                    # 物理运算应该包含物理运算的帧内容和时间间隔
+                    self.fixed_update(frame=frame, delta_time=delta_time)  # 物理运算
+                self.update_frames.remove(frame)
+            self.input_manager()  # 输入管理
+            self.lock.release()
             self.clock.tick(self.fps_physics)  # 获取时间差，控制帧率
 
     def callback_recv(self, data, tcp_client):
         data = json.loads(data.decode())
+        print(data)
         cmd = CommandType(data['command'])
         if cmd == CommandType.cmd_login_resp:
             self.player_id = data['player_id']
         elif cmd == CommandType.cmd_matching_successful:
             print('matching successfully. ')
-        elif cmd == CommandType.cmd_frame_update:
-            print(data)
+            # 加载地图
+            self.game_render.game_window_size = np.array(self.game_window_size).reshape((2,))
+            self.game_render.load_map_xml(self.game_resources.get_map(data['map_id']))
+            self.map_size = self.game_render.get_map_size()
 
+            planes = data['planes']
+            for plane_info in planes:
+                if plane_info['player_id'] == self.player_id:
+                    # 加载飞机
+                    self.player_plane = self.game_resources.get_plane('Bf109', plane_type=PlaneType.FighterJet)
+                    self.player_plane.set_map_size(self.map_size)
+                    self.player_plane.set_position(np.array([plane_info['position_x'], plane_info['position_y']]))
+                    self.player_plane.team_number = 1
+                    self.team1_group.add(self.player_plane)
+                    self.id_plane_mapping[plane_info['player_id']] = self.player_plane
+                else:
+                    new_plane = self.game_resources.get_plane('F3F', plane_type=PlaneType.FighterJet)
+                    new_plane.set_position(np.array([2000, 1700]))
+                    new_plane.set_map_size(self.map_size)
+                    new_plane.team_number = 2
+                    self.team2_group.add(new_plane)
+                    self.id_plane_mapping[plane_info['player_id']] = new_plane
+
+            # self.all_planes_group.add(self.team1_group, self.team2_group)
+
+            # 进行游戏必要的同步变量设置
+            self.is_game_ready = True
+        elif cmd == CommandType.cmd_frame_update:
+            self.update_frames.append(data)
 
     def input_manager(self):
         # 处理输入
         for event in pg.event.get():  # 遍历所有事件
             if event.type == pg.QUIT:  # 如果单击关闭窗口，则退出
+                self.client.close()
                 pg.quit()  # 退出pg
                 sys.exit(0)
 
@@ -413,22 +453,29 @@ class FightingAircraftGame:
             # start_point[0] += step
             self.player_plane.secondary_fire()
 
-        data = {
-            "command": "user_action",
-            "match_id": 0,
-            "player_id": str(self.player_id),
-            "action": str(self.player_plane.input_state)
-        }
+        if self.is_game_ready:
+            data = {
+                "command": CommandType.cmd_player_action.value,
+                "match_id": 0,
+                "player_id": self.player_id,
+                "action": self.player_plane.input_state.value
+            }
+            self.player_plane.input_state = InputState.NoInput
+            self.client.send(json.dumps(data), pack_data=True, data_type=DataType.TypeString)
 
-        self.client.send(json.dumps(data), pack_data=True, data_type=DataType.TypeString)
-
-    def fixed_update(self, delta_time):
+    def fixed_update(self, frame, delta_time):
         """
         用于更新物理计算
         :param delta_time: ms
         :return:
         """
-        for plane in self.all_planes_group:
+        # 先更新飞机的输入状态
+        for action_info in frame['actions']:
+            plane = self.id_plane_mapping[action_info['player_id']]
+            plane.input_state = InputState(action_info['action'])
+
+        # 然后遍历飞机的飞行状态
+        for plane in self.id_plane_mapping.values():
             pos, _ = plane.fixed_update(delta_time=delta_time)
             plane.set_position(pos)
             # 所有发射的弹药也得 move
@@ -454,6 +501,8 @@ class FightingAircraftGame:
                         print('enemy eliminated. ')
                     plane.bullet_group.remove(bullet)
 
+        self.local_time_stamp += 1
+
     def render(self):
         print('render thread started. ')
         delta_time = 1 / self.fps_render
@@ -473,7 +522,7 @@ class FightingAircraftGame:
                     self.player_plane.get_engine_temperature(), self.player_plane.velocity,
                     pos[0], pos[1], dir_v[0], dir_v[1]),
                 True, (0, 0, 0))
-            for plane in self.all_planes_group:
+            for plane in self.id_plane_mapping.values():
                 pos, dir_v = plane.move(delta_time=self.render_delta_time)
                 self.game_render.render_object(
                     plane, pos, screen=self.screen, draw_collision_box=True)

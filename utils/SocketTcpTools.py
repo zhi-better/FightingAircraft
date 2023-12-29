@@ -57,6 +57,10 @@ class TcpBaseTools:
         # 先创建一个socket
         self.socket_init()
 
+    def close(self):
+        self.tcp_socket.close()
+        self.tcp_socket = None
+
     def socket_init(self):
         """
         初始化创建一个socket
@@ -173,7 +177,7 @@ class TcpBaseTools:
         while True:
             try:
                 recv_data = tcp_client.recv(self.buffer_size)
-            except ConnectionResetError:
+            except ConnectionResetError or OSError:
                 print("socket: {} has closed, it has been remove from the connection pool. ".format(
                     tcp_client_address))
                 tcp_client.close()
@@ -274,8 +278,9 @@ class TcpSererTools(TcpBaseTools):
             if tcp_socket:
                 tcp_socket.send(data)
         except Exception as e:
-            self.tcp_clients.remove(tcp_socket)
-            tcp_socket.close()
+            if tcp_socket in self.tcp_clients:
+                self.tcp_clients.remove(tcp_socket)
+                tcp_socket.close()
             # self.tcp_socket = None
             print(e)
 
@@ -316,7 +321,8 @@ class TcpClientTools(TcpBaseTools):
             data = self.pack_data(data=data, data_type=data_type)
         try:
             if self.connect_state:
-                self.tcp_socket.send(data)
+                ret = self.tcp_socket.send(data)
+                # print('send bytes: {}'.format(ret))
         except OSError as e:
             self.tcp_socket.close()
             self.tcp_socket = None

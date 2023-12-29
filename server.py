@@ -56,12 +56,12 @@ class FightingAircraftGameServer:
         self.clock = pygame.time.Clock()
         self.allocator = PlayerIDAllocator()
         self.player_map = {}
+        self.time_stamp = 0
         self.update_frame_data = {"command": CommandType.cmd_frame_update.value,
-                                  'timestamp': 0,
+                                  'time_stamp': self.time_stamp,
                                   "actions": []}
 
-        while True:
-            self.clock.tick(30)  # 获取时间差，控制帧率
+        self.server_start()
 
     def server_callback(self, data, tcp_client):
         """
@@ -70,46 +70,52 @@ class FightingAircraftGameServer:
         :return:
         """
         data = json.loads(data.decode())
+        print(data)
         cmd = CommandType(data['command'])
-        data = {}
+        data_resp = {}
         if cmd == CommandType.cmd_login:
-            data['command'] = CommandType.cmd_login_resp.value
-            data['player_id'] = self.allocator.allocate_player_id()
+            data_resp['command'] = CommandType.cmd_login_resp.value
+            data_resp['player_id'] = self.allocator.allocate_player_id()
 
             # 保存玩家和对应的发送端口
-            self.player_map[data['player_id']] = tcp_client
-            self.server.send(tcp_client, data=json.dumps(data), pack_data=True, data_type=DataType.TypeString)
+            self.player_map[data_resp['player_id']] = tcp_client
+            self.server.send(tcp_client, data=json.dumps(data_resp), pack_data=True, data_type=DataType.TypeString)
+            # self.server.send(server.tcp_clients[0], data=json.dumps(data_resp), pack_data=True, data_type=DataType.TypeString)
 
-            if len(self.player_map.keys()) >= 1:
+            if len(self.player_map.keys()) > 1:
                 start_data = {"command": CommandType.cmd_matching_successful.value,
-                              'timestamp': 0,
+                              'time_stamp': 0,
+                              'map_id': 5,
                               "planes": []}
                 for key in self.player_map.keys():
                     start_data["planes"].append({"player_id": key, "position_x": 1000, "position_y": 1000})
 
                 for client in self.server.tcp_clients:
                     self.server.send(client,
-                                data=json.dumps(self.update_frame_data),
+                                data=json.dumps(start_data),
                                 pack_data=True,
                                 data_type=DataType.TypeString)
 
-                    # 启动服务器
-                    self.server_start()
+                self.time_stamp = 0
         elif cmd == CommandType.cmd_player_action:
             action_data = {'player_id': data['player_id'], 'action': data['action']}
             self.update_frame_data["actions"].append(action_data)
+        else:
+            print(data)
+
 
     def server_start(self):
         while True:
             # 保证服务器以 30FPS 的速度转播玩家操作
             self.clock.tick(30)
-
-            for client in self.server.tcp_clients:
-                self.server.send(client, data=json.dumps(self.update_frame_data), pack_data=True,
-                            data_type=DataType.TypeString)
-            # 清空用户操作，更新时间戳
-            self.update_frame_data["actions"].clear()
-            self.update_frame_data['timestamp'] += 1
+            if len(self.server.tcp_clients):
+                for client in self.server.tcp_clients:
+                    self.server.send(client, data=json.dumps(self.update_frame_data), pack_data=True,
+                                data_type=DataType.TypeString)
+                # 清空用户操作，更新时间戳
+                self.update_frame_data["actions"].clear()
+                self.time_stamp += 1
+                self.update_frame_data['time_stamp'] = self.time_stamp
 
 
 if __name__ == '__main__':
