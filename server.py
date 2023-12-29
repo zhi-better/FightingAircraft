@@ -78,7 +78,9 @@ class FightingAircraftGameServer:
             data_resp['player_id'] = self.allocator.allocate_player_id()
 
             # 保存玩家和对应的发送端口
-            self.player_map[data_resp['player_id']] = tcp_client
+            self.player_map[data_resp['player_id']] = {}
+            self.player_map[data_resp['player_id']]['tcp'] = tcp_client
+            self.player_map[data_resp['player_id']]['plane_name'] = data['plane_name']
             self.server.send(tcp_client, data=json.dumps(data_resp), pack_data=True, data_type=DataType.TypeString)
             # self.server.send(server.tcp_clients[0], data=json.dumps(data_resp), pack_data=True, data_type=DataType.TypeString)
 
@@ -88,13 +90,13 @@ class FightingAircraftGameServer:
                               'map_id': 5,
                               "planes": []}
                 for key in self.player_map.keys():
-                    start_data["planes"].append({"player_id": key, "position_x": 1000, "position_y": 1000})
+                    start_data["planes"].append(
+                        {"player_id": key, "position_x": 1000, "position_y": 1000,
+                         'plane_name': self.player_map[key]['plane_name']})
 
-                for client in self.server.tcp_clients:
-                    self.server.send(client,
-                                data=json.dumps(start_data),
-                                pack_data=True,
-                                data_type=DataType.TypeString)
+                self.server.send_all_clients(data=json.dumps(start_data),
+                                             pack_data=True,
+                                             data_type=DataType.TypeString)
 
                 self.time_stamp = 0
         elif cmd == CommandType.cmd_player_action:
@@ -103,15 +105,14 @@ class FightingAircraftGameServer:
         else:
             print(data)
 
-
     def server_start(self):
         while True:
             # 保证服务器以 30FPS 的速度转播玩家操作
             self.clock.tick(30)
-            if len(self.server.tcp_clients):
+            if len(self.server.tcp_clients) > 1:
                 for client in self.server.tcp_clients:
                     self.server.send(client, data=json.dumps(self.update_frame_data), pack_data=True,
-                                data_type=DataType.TypeString)
+                                     data_type=DataType.TypeString)
                 # 清空用户操作，更新时间戳
                 self.update_frame_data["actions"].clear()
                 self.time_stamp += 1

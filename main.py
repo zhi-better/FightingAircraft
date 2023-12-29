@@ -322,8 +322,9 @@ class FightingAircraftGame:
         data = {
             "command": CommandType.cmd_login.value,
             "player_id": self.player_id,
-            "plane_name": random.choice(list(self.game_resources.airplane_info_map.keys()))
+            "plane_name": 'Bf109'
         }
+        # random.choice(list(self.game_resources.airplane_info_map.keys()))
         self.client.send(json.dumps(data), pack_data=True, data_type=DataType.TypeString)
         # self.client.send(json.dumps({'command': CommandType.cmd_none.value}), pack_data=True, data_type=DataType.TypeString)
 
@@ -383,15 +384,15 @@ class FightingAircraftGame:
             for plane_info in planes:
                 if plane_info['player_id'] == self.player_id:
                     # 加载飞机
-                    self.player_plane = self.game_resources.get_plane('Bf109', plane_type=PlaneType.FighterJet)
+                    self.player_plane = self.game_resources.get_plane(plane_info['plane_name'], plane_type=PlaneType.FighterJet)
                     self.player_plane.set_map_size(self.map_size)
                     self.player_plane.set_position(np.array([plane_info['position_x'], plane_info['position_y']]))
                     self.player_plane.team_number = 1
                     self.team1_group.add(self.player_plane)
                     self.id_plane_mapping[plane_info['player_id']] = self.player_plane
                 else:
-                    new_plane = self.game_resources.get_plane('F3F', plane_type=PlaneType.FighterJet)
-                    new_plane.set_position(np.array([2000, 1700]))
+                    new_plane = self.game_resources.get_plane(plane_info['plane_name'], plane_type=PlaneType.FighterJet)
+                    new_plane.set_position(np.array([plane_info['position_x'], plane_info['position_y']]))
                     new_plane.set_map_size(self.map_size)
                     new_plane.team_number = 2
                     self.team2_group.add(new_plane)

@@ -284,6 +284,10 @@ class TcpSererTools(TcpBaseTools):
             # self.tcp_socket = None
             print(e)
 
+    def send_all_clients(self, data, pack_data=False, data_type=DataType.TypeNone):
+        for client in self.tcp_clients:
+            self.send(client, data, pack_data=pack_data, data_type=data_type)
+
 class TcpClientTools(TcpBaseTools):
     def __init__(self):
         super().__init__()
