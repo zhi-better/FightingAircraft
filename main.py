@@ -46,6 +46,7 @@ class GameResources:
         self.explode_sprite = None
         self.temporary_sub_textures = {}
         self.temporary_sprite = None
+        self.thumbnail_map_sprite = None
 
         self.load_all()
 
@@ -155,7 +156,18 @@ class GameResources:
                 num_xml_file += 1
 
     def get_map(self, map_index=0):
-        return self.maps_map[map_index]
+        file_name = self.maps_map[map_index]
+        # 寻找最后一个点的位置，表示扩展名的开始
+        last_dot_index = file_name.rfind('.')
+        # 如果找到点，并且点不在字符串的开头或结尾
+        if last_dot_index != -1 and last_dot_index < len(file_name) - 1:
+            # 获取扩展名前的部分
+            file_base_name = file_name[:last_dot_index]
+            # 将扩展名更改为 .png
+            file_name_with_png = file_base_name + '.png'
+
+        self.thumbnail_map_sprite = pygame.image.load(file_name_with_png)
+        return self.maps_map[map_index], self.thumbnail_map_sprite
 
     def get_bullet_sprite(self, bullet_key='bullet1'):
         """
@@ -326,7 +338,7 @@ class FightingAircraftGame:
         # 连接网络并发送匹配请求
         self.client.set_callback_fun(self.callback_recv)
         self.recv_server_signal = True
-        self.client.connect_to_server('172.21.132.236', 4444)
+        self.client.connect_to_server('172.21.152.184', 4444)
         data = {
             "command": CommandType.cmd_login.value,
             "player_id": self.player_id,
@@ -382,7 +394,8 @@ class FightingAircraftGame:
                 print('matching successfully. ')
                 # 加载地图
                 self.game_render.game_window_size = np.array(self.game_window_size).reshape((2,))
-                self.game_render.load_map_xml(self.game_resources.get_map(data['map_id']))
+                map_xml_name, _ = self.game_resources.get_map(data['map_id'])
+                self.game_render.load_map_xml(map_xml_name)
                 self.map_size = self.game_render.get_map_size()
 
                 planes = data['planes']
@@ -520,31 +533,63 @@ class FightingAircraftGame:
         delta_time = 1 / self.fps_render
         self.render_delta_time = 0
         font = pg.font.Font(None, 36)
+        self.game_render.draw_collision_box = False
+        self.game_render.set_screen(self.screen)
 
         while not self.exit_event.is_set():
             self.lock.acquire()
             if self.is_game_ready:
                 self.render_delta_time += delta_time
-                # print(f'render delta time: {self.render_delta_time}')
-
                 pos, dir_v = self.player_plane.move(delta_time=self.render_delta_time)
                 self.game_render.render_map(pos, screen=self.screen)
                 text = font.render(
-                    'Engine temperature: {:.2f}, Speed: {:.2f}, position: [{:.2f}, {:.2f}], dir_vector: [{:.2f}, {:.2f}]'.format(
+                    'Engine temperature: {:.2f}, Speed: {:.2f}, position: [{:.2f}, {:.2f}]'.format(
                         self.player_plane.get_engine_temperature(), self.player_plane.velocity,
-                        pos[0], pos[1], dir_v[0], dir_v[1]),
+                        pos[0], pos[1]),
                     True, (0, 0, 0))
-                for plane in self.id_plane_mapping.values():
-                    pos, dir_v = plane.move(delta_time=self.render_delta_time)
-                    self.game_render.render_object(
-                        plane, pos, screen=self.screen, draw_collision_box=False)
+                for plane in self.team1_group:
+                    self.game_render.render_plane(plane=plane, team_id=1, delta_time=delta_time)
                     # print('\r obj count: {}'.format(len(self.player_plane.bullet_list)), end='')
                     for bullet in plane.bullet_group:
-                        self.game_render.render_object(
-                            bullet, bullet.get_position(), screen=self.screen, draw_collision_box=False)
+                        self.game_render.render_bullet(bullet=bullet)
+                for plane in self.team2_group:
+                    # pos, dir_v = plane.move(delta_time=self.render_delta_time)
+                    self.game_render.render_plane(plane=plane, team_id=2, delta_time=delta_time)
+                    # print('\r obj count: {}'.format(len(self.player_plane.bullet_list)), end='')
+                    for bullet in plane.bullet_group:
+                        self.game_render.render_bullet(bullet=bullet)
 
                 # 将文本绘制到屏幕上
                 self.screen.blit(text, (10, 10))
+                # 然后在右上角显示小地图
+                thumbnail_map_sprite_rect = self.game_resources.thumbnail_map_sprite.get_rect()
+                thumbnail_map_render_left = self.game_window_size[0] - thumbnail_map_sprite_rect.width
+                self.screen.blit(
+                    self.game_resources.thumbnail_map_sprite,
+                    (thumbnail_map_render_left, 0))
+                scale = thumbnail_map_sprite_rect.width / self.map_size[0]
+                # 然后根据小地图的位置来显示不同的飞机在缩略图中的位置
+                for plane in self.team1_group:
+                    pos = plane.get_position()
+                    pygame.draw.circle(
+                        self.screen, (0, 255, 0),
+                        (thumbnail_map_render_left + pos[0]*scale,
+                         pos[1]*scale), 2)
+                for plane in self.team2_group:
+                    pos = plane.get_position()
+                    pygame.draw.circle(
+                        self.screen, (255, 0, 0),
+                        (thumbnail_map_render_left + pos[0]*scale,
+                         pos[1]*scale), 2)
+                # 然后绘制框框
+                pos = self.player_plane.get_position()
+                pygame.draw.rect(
+                    self.screen, (255, 0, 0),
+                    (thumbnail_map_render_left + (pos[0]-0.5*self.game_window_size[0])*scale,
+                         (pos[1]-0.5*self.game_window_size[1])*scale,
+                     self.game_window_size[0]*scale,
+                     self.game_window_size[1]*scale), 2)
+
             else:
                 # 清屏
                 self.screen.fill((255, 255, 255))

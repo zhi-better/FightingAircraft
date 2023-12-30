@@ -138,21 +138,25 @@ class FightingAircraftGameServer:
         elif cmd == CallbackCommand.SocketClose:
             tcp_client = param
             player_id = self.tcp_client_2_player_id[tcp_client]
-            room_number = self.player_id_2_player_info[player_id]['room_number']
-            # 首先判断他在哪个房间，如果房间没人了，直接把房间删了，否则就发送通知，某玩家离线
-            room_info = self.room_info_map[room_number]
-            room_info['tcp_list'].remove(tcp_client)
-            player_left_number = len(room_info['tcp_list'])
-            print('player_id: {} has offline, the room_number: {} has left {} players.'.format(
-                player_id, room_number, player_left_number))
-            if player_left_number == 0:
-                del self.room_info_map[room_number]
-                print('the number of room[{}] has been removed, room remaining: {}.'.format(
-                    room_number, len(list(self.room_info_map.keys()))))
+            # 首先需要判断它是否仍在匹配队列
+            if player_id in self.matching_queue.queue:
+                self.matching_queue.queue.remove(player_id)
+            else:
+                room_number = self.player_id_2_player_info[player_id]['room_number']
+                # 首先判断他在哪个房间，如果房间没人了，直接把房间删了，否则就发送通知，某玩家离线
+                room_info = self.room_info_map[room_number]
+                room_info['tcp_list'].remove(tcp_client)
+                player_left_number = len(room_info['tcp_list'])
+                print('player_id: {} has offline, the room_number: {} has left {} players.'.format(
+                    player_id, room_number, player_left_number))
+                if player_left_number == 0:
+                    del self.room_info_map[room_number]
+                    print('the number of room[{}] has been removed, room remaining: {}.'.format(
+                        room_number, len(list(self.room_info_map.keys()))))
 
-            # 删除这两个用户
-            del self.player_id_2_player_info[player_id]
-            del self.tcp_client_2_player_id[tcp_client]
+                # 删除这两个用户
+                del self.player_id_2_player_info[player_id]
+                del self.tcp_client_2_player_id[tcp_client]
 
     def server_start(self):
         frame_update_template = {'command': CommandType.cmd_frame_update.value,

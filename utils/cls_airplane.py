@@ -184,7 +184,7 @@ class AirPlane(DynamicObject):
         """
         self.speed = speed
         self.velocity = speed
-        self.max_speed = self.speed * 2
+        self.max_speed = self.speed * 1.5
         self.min_speed = self.speed * 0.7
 
     @overrides
@@ -198,7 +198,7 @@ class AirPlane(DynamicObject):
         # ---------------------------------------------
         # turn
         direction_vector = self.direction_vector
-        ang_velocity_tmp = self.angular_velocity * delta_time * 0.08
+        ang_velocity_tmp = self.angular_velocity * delta_time * 0.06
         rotation_matrix = np.array(
             [[np.cos(np.radians(ang_velocity_tmp)), -np.sin(np.radians(ang_velocity_tmp))],
              [np.sin(np.radians(ang_velocity_tmp)), np.cos(np.radians(ang_velocity_tmp))]])
@@ -206,7 +206,7 @@ class AirPlane(DynamicObject):
         # ---------------------------------------------
         # move
         _2d_velocity = int(
-            self.velocity * delta_time * 0.1 * np.cos(np.radians(self.pitch_attitude * 10))) * np.multiply(
+            self.velocity * delta_time * 0.14 * np.cos(np.radians(self.pitch_attitude * 10))) * np.multiply(
             direction_vector, np.array([1, -1]))
 
         return self.get_position() + _2d_velocity, direction_vector
@@ -419,6 +419,7 @@ class AirPlane(DynamicObject):
         self.air_plane_params.health_points = health
         if health <= 0:
             health = 1000
+            self.air_plane_params.health_points = health
             return True
         else:
             return False

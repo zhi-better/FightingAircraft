@@ -25,6 +25,11 @@ class GameRender:
         self.y_load_block_count = 0
         self.view_position = np.zeros((2,))
         self.font = None
+        self.screen = None
+        self.draw_collision_box = False
+
+    def set_screen(self, screen):
+        self.screen = screen
 
     def get_map_size(self):
         return self.map_size
@@ -44,11 +49,60 @@ class GameRender:
             tile_rect = pg.Rect(0, 0, 0, 0)
         return tile_rect
 
-    def render_object(self, game_sprite, position, screen, draw_collision_box=False):
+    def render_bullet(self, bullet):
         """
-        渲染大地图中 x y 位置的目标物体
-        :param x:
-        :param y:
+
+        :param bullet:
+        :return:
+        """
+        sprite = bullet.get_sprite()
+        plane_rect, should_render = (
+            self.get_object_render_rect(sprite, bullet.get_position()))
+        if should_render:
+            self.screen.blit(sprite, plane_rect)
+
+        if self.draw_collision_box:
+            # 创建一个充气的矩形，以便在原始矩形周围绘制边框
+            inflated_rect = plane_rect.inflate(2, 2)  # 边框大小为4像素
+            pygame.draw.rect(self.screen, (255, 0, 0), inflated_rect, 2)  # 绘制红色边框
+
+    def render_plane(self, plane, team_id, delta_time):
+        """
+
+        :param plane:
+        :param team_id:
+        :return:
+        """
+        sprite = plane.get_sprite()
+        pos, dir_v = plane.move(delta_time=delta_time)
+        plane_rect, should_render = (
+            self.get_object_render_rect(sprite, pos))
+        if team_id == 1:
+            font_color = (0, 255, 0)
+        else:
+            font_color = (255, 0, 0)
+        if should_render:
+            self.screen.blit(sprite, plane_rect)
+            if self.font is None:
+                self.font = pygame.font.Font(None, 24)  # 使用默认字体，大小36
+            # 在飞机上方显示生命值文本
+            text_surface = self.font.render(
+                f'Health: {plane.air_plane_params.health_points}',
+                True, font_color)  # 黑色文本
+            text_rect = text_surface.get_rect(
+                center=(plane_rect.centerx, plane_rect.centery - 0.6 * plane_rect.height))  # 设置文本位置
+            self.screen.blit(text_surface, text_rect)
+
+            if self.draw_collision_box:
+                # 创建一个充气的矩形，以便在原始矩形周围绘制边框
+                inflated_rect = plane_rect.inflate(2, 2)  # 边框大小为4像素
+                pygame.draw.rect(self.screen, (255, 0, 0), inflated_rect, 2)  # 绘制红色边框
+
+    def get_object_render_rect(self, sprite, position):
+        """
+        获取对应的元素在屏幕上渲染的范围和是否应该被渲染
+        :param sprite:
+        :param position:
         :return:
         """
         # position = np.array([rect.x, rect.y]) - 0.5*np.array([rect.width, rect.height])
@@ -61,39 +115,27 @@ class GameRender:
                 and self.view_position[0] < left_top_threshold[0]):
             position[0] -= self.map_size[0]
         elif (self.view_position[0] > right_down_threshold[0]
-                and position[0] < left_top_threshold[0]):
+              and position[0] < left_top_threshold[0]):
             position[0] += self.map_size[0]
         if (position[1] > right_down_threshold[1]
                 and self.view_position[1] < left_top_threshold[0]):
             position[1] -= self.map_size[1]
         elif (self.view_position[1] > right_down_threshold[1]
-                and position[1] < left_top_threshold[0]):
+              and position[1] < left_top_threshold[0]):
             position[1] += self.map_size[1]
         a = np.floor(position[0] - self.view_position[0])
         # 好你个bug，老子找了半天才发现坐标系是反的
         b = np.floor(position[1] - self.view_position[1])
-        sprite = game_sprite.get_sprite()
+        # sprite = game_sprite.get_sprite()
         plane_rect = sprite.get_rect(
             center=(0.5 * self.game_window_size[0] + a,
                     0.5 * self.game_window_size[1] + b))
-        # print('\r {}, {}'.format(a, b), end='')
-        if plane_rect.x <= self.game_window_size[0] and plane_rect.y <= self.game_window_size[1]:
-            screen.blit(sprite, plane_rect)
-            if isinstance(game_sprite, AirPlane):
-                if self.font is None:
-                    self.font = pygame.font.Font(None, 24)  # 使用默认字体，大小36
-                # 在飞机上方显示生命值文本
-                text_surface = self.font.render(
-                    f'Health: {game_sprite.air_plane_params.health_points}',
-                    True, (0, 0, 0))  # 黑色文本
-                text_rect = text_surface.get_rect(
-                    center=(plane_rect.centerx, plane_rect.centery - 50))  # 设置文本位置
-                screen.blit(text_surface, text_rect)
 
-            if draw_collision_box:
-                # 创建一个充气的矩形，以便在原始矩形周围绘制边框
-                inflated_rect = plane_rect.inflate(2,2)  # 边框大小为4像素
-                pygame.draw.rect(screen, (255, 0, 0), inflated_rect, 2)  # 绘制红色边框
+        # 返回渲染的区域和是否应该被渲染
+        if plane_rect.x <= self.game_window_size[0] and plane_rect.y <= self.game_window_size[1]:
+            return plane_rect, True
+        else:
+            return plane_rect, False
 
     def render_map(self, position, screen):
         """
