@@ -495,12 +495,26 @@ class AttackAircraft(AirPlane):
 class Bomber(AirPlane):
     def __init__(self):
         super().__init__()
+        self.primary_weapon_type = WeaponType.Weapon_None
+        self.secondary_weapon_type = WeaponType.Weapon_None
+        self.reload_counter = 0
+        self.reload_time = 1
 
     def pitch(self):
         pass
 
     def primary_weapon_attack(self):
-        print('primary_weapon_attack')
+        position_list = [[45, 30],
+                         [45, 15],
+                         [45, -15],
+                         [45, -30]]
+
+        for pos in position_list:
+            self.create_bullet(self.air_plane_sprites.primary_bullet_sprite, np.array(pos), self.direction_vector)
 
     def secondary_weapon_attack(self):
-        print('primary_weapon_attack')
+        position_list = [[55, 0]]
+
+        for pos in position_list:
+            self.create_bullet(self.air_plane_sprites.secondary_bullet_sprite, np.array(pos), self.direction_vector)
+
