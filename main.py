@@ -22,6 +22,7 @@ from utils.SocketTcpTools import *
 from utils.cls_airplane import *
 from utils.cls_game_render import *
 
+
 class CommandType(Enum):
     cmd_none = 0
     cmd_login = 1
@@ -219,18 +220,25 @@ class GameResources:
             elif parts[2].find('pitch') != -1:
                 pitch_mapping[int(parts[2][5:])] = {'x': x, 'y': y, 'width': width, 'height': height}
 
-        # 返回图片路径和映射字典
-        return 'objects/' + image_path, roll_mapping, pitch_mapping
+        if pitch_mapping == {}:
+            plane_type = PlaneType.Bomber
+        else:
+            plane_type = PlaneType.FighterJet
 
-    def get_plane(self, plane_name, plane_type):
+        # 返回图片路径和映射字典
+        return 'objects/' + image_path, roll_mapping, pitch_mapping, plane_type
+
+    def get_plane(self, plane_name):
         param = self.airplane_info_map[plane_name]
+        image_path, roll_mapping, pitch_mapping, plane_type = self.load_plane_sprites(
+            'objects/{}.xml'.format(plane_name))
 
         if plane_type == PlaneType.FighterJet:
             plane = FighterJet()
         elif plane_type == PlaneType.AttackAircraft:
-            plane = FighterJet()
-        elif plane_type == PlaneType.AttackAircraft:
-            plane = FighterJet()
+            plane = AttackAircraft()
+        elif plane_type == PlaneType.Bomber:
+            plane = Bomber()
         else:
             raise ValueError('wrong plane type. ')
 
@@ -242,7 +250,6 @@ class GameResources:
         plane.air_plane_params.secondary_weapon_reload_time = 0.1
         # plane.air_plane_params.primary_weapon_reload_time = 0
         # plane.air_plane_params.secondary_weapon_reload_time = 0
-        image_path, roll_mapping, pitch_mapping = self.load_plane_sprites('objects/{}.xml'.format(plane_name))
         plane.load_sprite('objects/{}.png'.format(plane_name))
         plane.air_plane_sprites.roll_mapping = roll_mapping
         plane.air_plane_sprites.pitch_mapping = pitch_mapping
@@ -318,11 +325,12 @@ class FightingAircraftGame:
         # 连接网络并发送匹配请求
         self.client.set_callback_fun(self.callback_recv)
         self.recv_server_signal = True
-        self.client.connect_to_server('172.21.194.105', 4444)
+        self.client.connect_to_server('172.21.132.236', 4444)
         data = {
             "command": CommandType.cmd_login.value,
             "player_id": self.player_id,
-            "plane_name": 'Bf109'
+            "plane_name": random.choice(list(self.game_resources.airplane_info_map.keys()))
+            # "plane_name": 'Bf110'
         }
         # random.choice(list(self.game_resources.airplane_info_map.keys()))
         self.client.send(json.dumps(data), pack_data=True, data_type=DataType.TypeString)
@@ -363,8 +371,8 @@ class FightingAircraftGame:
                     # 物理运算应该包含物理运算的帧内容和时间间隔
                     self.fixed_update(frame=frame, delta_time=delta_time)  # 物理运算
                 self.update_frames.remove(frame)
-            self.input_manager()  # 输入管理
             self.lock.release()
+            self.input_manager()  # 输入管理
             self.clock.tick(self.fps_physics)  # 获取时间差，控制帧率
 
     def callback_recv(self, data, tcp_client):
@@ -384,14 +392,14 @@ class FightingAircraftGame:
             for plane_info in planes:
                 if plane_info['player_id'] == self.player_id:
                     # 加载飞机
-                    self.player_plane = self.game_resources.get_plane(plane_info['plane_name'], plane_type=PlaneType.FighterJet)
+                    self.player_plane = self.game_resources.get_plane(plane_info['plane_name'])
                     self.player_plane.set_map_size(self.map_size)
                     self.player_plane.set_position(np.array([plane_info['position_x'], plane_info['position_y']]))
                     self.player_plane.team_number = 1
                     self.team1_group.add(self.player_plane)
                     self.id_plane_mapping[plane_info['player_id']] = self.player_plane
                 else:
-                    new_plane = self.game_resources.get_plane(plane_info['plane_name'], plane_type=PlaneType.FighterJet)
+                    new_plane = self.game_resources.get_plane(plane_info['plane_name'])
                     new_plane.set_map_size(self.map_size)
                     new_plane.set_position(np.array([plane_info['position_x'], plane_info['position_y']]))
 

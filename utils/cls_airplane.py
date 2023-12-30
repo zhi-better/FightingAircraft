@@ -150,7 +150,7 @@ class AirPlane(DynamicObject):
         elif self.pitch_attitude != 0:
             rect_dic = self.air_plane_sprites.pitch_mapping[int(self.pitch_attitude)]
         else:
-            rect_dic = self.air_plane_sprites.pitch_mapping[int(0)]
+            rect_dic = self.air_plane_sprites.roll_mapping[int(0)]
 
         self.image = get_rect_sprite(self.image_template, rect_dic)
         self.image = pygame.transform.rotate(self.image, self.get_angle(self.direction_vector))
@@ -438,12 +438,12 @@ class AirPlane(DynamicObject):
 
     def create_bullet(self, bullet_sprite, local_position, direction):
         new_bullet = Bullet()
+        new_bullet.set_map_size(self.get_map_size())
         new_bullet.set_sprite(bullet_sprite)
         local_position[1] = np.cos(np.radians(self.roll_attitude * 10)) * local_position[1]
         new_bullet.set_position(local_to_world(
             self.get_position(), direction, local_point=local_position))
         new_bullet.set_speed(self.velocity + 3)
-        new_bullet.set_map_size(self.get_map_size())
         new_bullet.set_direction_vector(direction)
         new_bullet.damage = 10
         self.bullet_group.add(new_bullet)
@@ -495,6 +495,9 @@ class AttackAircraft(AirPlane):
 class Bomber(AirPlane):
     def __init__(self):
         super().__init__()
+
+    def pitch(self):
+        pass
 
     def primary_weapon_attack(self):
         print('primary_weapon_attack')

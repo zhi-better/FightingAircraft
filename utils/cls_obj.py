@@ -63,6 +63,8 @@ class StaticObject(pygame.sprite.Sprite):
         return self.image
 
     def set_position(self, vector_2d):
+        if self._map_size[0] == 0 or self._map_size[1] == 0:
+            Warning('please set map size first!!!')
         # 更新对应的 Sprite 的位置
         vector_2d[0] = vector_2d[0] % self._map_size[0]
         vector_2d[1] = vector_2d[1] % self._map_size[1]
