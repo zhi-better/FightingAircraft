@@ -16,7 +16,7 @@ if output_directory:
 # 执行打包操作
 PyInstaller.__main__.run([
     '--onefile',
-    '--noconsole',  # 这个选项会使生成的exe文件不显示cmd窗口
+    # '--noconsole',  # 这个选项会使生成的exe文件不显示cmd窗口
     '--distpath', output_directory,
     '--name', output_name,
     file_to_package

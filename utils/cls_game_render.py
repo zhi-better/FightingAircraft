@@ -49,15 +49,16 @@ class GameRender:
             tile_rect = pg.Rect(0, 0, 0, 0)
         return tile_rect
 
-    def render_bullet(self, bullet):
+    def render_bullet(self, bullet, delta_time):
         """
 
         :param bullet:
         :return:
         """
         sprite = bullet.get_sprite()
+        pos, dir_v = bullet.move(delta_time=delta_time)
         plane_rect, should_render = (
-            self.get_object_render_rect(sprite, bullet.get_position()))
+            self.get_object_render_rect(sprite, pos))
         if should_render:
             self.screen.blit(sprite, plane_rect)
 

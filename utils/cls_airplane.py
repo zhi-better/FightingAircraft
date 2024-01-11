@@ -15,6 +15,7 @@ class AttitudeType(Enum):
 
 
 class PlaneType(Enum):
+    Simple = 0
     FighterJet = 1
     AttackAircraft = 2
     Bomber = 3
@@ -60,6 +61,8 @@ class AirPlaneParams:
         self.min_speed = 3  # 最小速度
         self.engine_heat_rate = 0  # 引擎温度升高速率
         self.overheat_duration = 60  # 引擎过热保护时间
+        self.plane_width = 0
+        self.plane_height = 0
         self.primary_weapon_reload_time = 0.5
         self.secondary_weapon_reload_time = 0.5
 
@@ -67,6 +70,7 @@ class AirPlaneParams:
 class AirPlane(DynamicObject):
     def __init__(self):
         super().__init__()
+        self.plane_type = PlaneType.Simple
         self.image_template = None
         self.air_plane_sprites = AirPlaneSprites()
         self.air_plane_params = AirPlaneParams()
@@ -396,8 +400,8 @@ class AirPlane(DynamicObject):
                 self.secondary_weapon_reload_counter -= delta_time * 0.001
 
         # --------------------------------------------------------------------
-        # 重置飞行状态
-        self.input_state = InputState.NoInput
+        # # 重置飞行状态
+        # self.input_state = InputState.NoInput
 
         pos, direction_vector = self.move(delta_time=delta_time)
         self.direction_vector = direction_vector
@@ -438,6 +442,7 @@ class AirPlane(DynamicObject):
         self.input_state = self.input_state | InputState.SharpTurnRight
 
     def create_bullet(self, bullet_sprite, local_position, direction):
+        # direction = np.array([-direction[1], direction[0]])
         new_bullet = Bullet()
         new_bullet.set_map_size(self.get_map_size())
         new_bullet.set_sprite(bullet_sprite)
@@ -461,22 +466,25 @@ class AirPlane(DynamicObject):
 class FighterJet(AirPlane):
     def __init__(self):
         super().__init__()
+        self.plane_type = PlaneType.FighterJet
         self.primary_weapon_type = WeaponType.Weapon_None
         self.secondary_weapon_type = WeaponType.Weapon_None
         self.reload_counter = 0
         self.reload_time = 1
 
     def primary_weapon_attack(self):
-        position_list = [[45, 30],
-                         [45, 15],
-                         [45, -15],
-                         [45, -30]]
+        height_start = self.air_plane_params.plane_height * 0.3
+        position_list = [[height_start, self.air_plane_params.plane_height * 0.3],
+                         [height_start, self.air_plane_params.plane_height * 0.1],
+                         [height_start, -self.air_plane_params.plane_height * 0.1],
+                         [height_start, -self.air_plane_params.plane_height * 0.3]]
 
         for pos in position_list:
-            self.create_bullet(self.air_plane_sprites.primary_bullet_sprite, np.array(pos), self.direction_vector)
+            self.create_bullet(
+                self.air_plane_sprites.primary_bullet_sprite, np.array(pos), self.direction_vector)
 
     def secondary_weapon_attack(self):
-        position_list = [[55, 0]]
+        position_list = [[self.air_plane_params.plane_height * 0.5, 0]]
 
         for pos in position_list:
             self.create_bullet(self.air_plane_sprites.secondary_bullet_sprite, np.array(pos), self.direction_vector)
@@ -485,6 +493,7 @@ class FighterJet(AirPlane):
 class AttackAircraft(AirPlane):
     def __init__(self):
         super().__init__()
+        self.plane_type = PlaneType.AttackAircraft
 
     def primary_weapon_attack(self):
         print('primary_weapon_attack')
@@ -496,25 +505,25 @@ class AttackAircraft(AirPlane):
 class Bomber(AirPlane):
     def __init__(self):
         super().__init__()
+        self.plane_type = PlaneType.Bomber
         self.primary_weapon_type = WeaponType.Weapon_None
         self.secondary_weapon_type = WeaponType.Weapon_None
         self.reload_counter = 0
         self.reload_time = 1
 
-    def pitch(self):
-        pass
-
     def primary_weapon_attack(self):
-        position_list = [[45, 30],
-                         [45, 15],
-                         [45, -15],
-                         [45, -30]]
+        height_start = self.air_plane_params.plane_height * 0.3
+        position_list = [[height_start, self.air_plane_params.plane_height * 0.3],
+                         [height_start, self.air_plane_params.plane_height * 0.1],
+                         [height_start, -self.air_plane_params.plane_height * 0.1],
+                         [height_start, -self.air_plane_params.plane_height * 0.3]]
 
         for pos in position_list:
-            self.create_bullet(self.air_plane_sprites.primary_bullet_sprite, np.array(pos), self.direction_vector)
+            self.create_bullet(
+                self.air_plane_sprites.primary_bullet_sprite, np.array(pos), self.direction_vector)
 
     def secondary_weapon_attack(self):
-        position_list = [[55, 0]]
+        position_list = [[self.air_plane_params.plane_height * 0.5, 0]]
 
         for pos in position_list:
             self.create_bullet(self.air_plane_sprites.secondary_bullet_sprite, np.array(pos), self.direction_vector)

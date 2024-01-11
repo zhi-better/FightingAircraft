@@ -347,7 +347,7 @@ class TcpSererTools(TcpBaseTools):
         except Exception as e:
             self.close_socket(tcp_socket)
             print(e)
-        print('start send data! ')
+        # print('start send data! ')
         self.lock.release()
 
     def send_all_clients(self, data, pack_data=False, data_type=DataType.TypeNone):
@@ -385,18 +385,17 @@ class TcpClientTools(TcpBaseTools):
         """
         # 5 循环接收和发送数据
         while not close_event.is_set():
-            # try:
-            #     if tcp_client:
-            #         recv_data = tcp_client.recv(self.buffer_size)
-            #     else:
-            #         Warning('the tcp_client is not available, skipping client process! ')
-            #         break
-            # except Exception as e:
-            #     self.close_socket(tcp_socket=tcp_client)
-            #     print(e)
-            #     return
+            try:
+                if tcp_socket:
+                    recv_data = tcp_socket.recv(self.buffer_size)
+                else:
+                    Warning('the tcp_client is not available, skipping client process! ')
+                    break
+            except Exception as e:
+                print(e)
+                return
             # ----------------------------------------------------------------
-            recv_data = tcp_socket.recv(self.buffer_size)
+            # recv_data = tcp_socket.recv(self.buffer_size)
             # 这个指的是客户端发来的断开连接的消息
             if recv_data == b'':
                 self.exit_event.set()

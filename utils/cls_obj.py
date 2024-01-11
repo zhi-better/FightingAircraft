@@ -20,6 +20,28 @@ def get_rect_sprite(sprite, rect_dic):
 
     return plane_sprite_subsurface
 
+# def get_rect_sprite(sprite, rect_dic, rotate_angle=0):
+#     # 获取矩形区域
+#     plane_rect = pygame.Rect(rect_dic['x'], rect_dic['y'], rect_dic['width'], rect_dic['height'])
+#
+#     # 获取原始图像
+#     original_image = sprite.subsurface(plane_rect)
+#
+#     # 如果设置了旋转角度，则进行旋转
+#     if rotate_angle != 0:
+#         # 将图像转换为NumPy数组
+#         image_array = pygame.surfarray.array3d(original_image)
+#
+#         # 逆时针旋转指定角度
+#         rotated_array = np.rot90(image_array, k=rotate_angle // 90)
+#
+#         # 将旋转后的数组转换回pygame图像
+#         rotated_image = pygame.surfarray.make_surface(rotated_array)
+#
+#         return rotated_image
+#     else:
+#         return original_image
+
 
 class StaticObject(pygame.sprite.Sprite):
     def __init__(self):

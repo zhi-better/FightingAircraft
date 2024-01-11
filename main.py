@@ -218,12 +218,12 @@ class GameResources:
         pitch_mapping = {}
 
         # 遍历SubTexture元素
-        for subtexture in root.findall('SubTexture'):
-            name = subtexture.attrib.get('name')
-            x = int(subtexture.attrib.get('x'))
-            y = int(subtexture.attrib.get('y'))
-            width = int(subtexture.attrib.get('width'))
-            height = int(subtexture.attrib.get('height'))
+        for sub_texture in root.findall('SubTexture'):
+            name = sub_texture.attrib.get('name')
+            x = int(sub_texture.attrib.get('x'))
+            y = int(sub_texture.attrib.get('y'))
+            width = int(sub_texture.attrib.get('width'))
+            height = int(sub_texture.attrib.get('height'))
 
             # 判断是滚转还是俯仰
             parts = name.split('/')
@@ -249,7 +249,7 @@ class GameResources:
             plane = FighterJet()
         elif plane_type == PlaneType.AttackAircraft:
             plane = AttackAircraft()
-        elif plane_type == PlaneType.Bomber:
+        elif plane_type == PlaneType.Bomber or len(pitch_mapping) == 0:
             plane = Bomber()
         else:
             raise ValueError('wrong plane type. ')
@@ -260,6 +260,8 @@ class GameResources:
         plane.air_plane_params.name = plane_name
         plane.air_plane_params.primary_weapon_reload_time = 0.2
         plane.air_plane_params.secondary_weapon_reload_time = 0.1
+        plane.air_plane_params.plane_width = roll_mapping[0]['width']
+        plane.air_plane_params.plane_height = roll_mapping[0]['height']
         # plane.air_plane_params.primary_weapon_reload_time = 0
         # plane.air_plane_params.secondary_weapon_reload_time = 0
         plane.load_sprite('objects/{}.png'.format(plane_name))
@@ -267,31 +269,36 @@ class GameResources:
         plane.air_plane_sprites.pitch_mapping = pitch_mapping
         # 设置主武器和副武器的贴图资源
         sprite, rect = self.get_bullet_sprite('bullet' + str(param['mainweapon'] + 1))
+        # plane.air_plane_sprites.primary_bullet_sprite = (
+        #     get_rect_sprite(rect, sprite, rotate_angle=-90))
+
         plane.air_plane_sprites.primary_bullet_sprite = get_rect_sprite(rect, sprite)
         sprite, rect = self.get_bullet_sprite('bullet' + str(param['secondweapon']))
-        plane.air_plane_sprites.secondary_bullet_sprite = get_rect_sprite(rect, sprite)
+        # plane.air_plane_sprites.secondary_bullet_sprite = (
+        #     get_rect_sprite(rect, sprite, rotate_angle=-90))
+        plane.air_plane_sprites.secondary_bullet_sprite = (
+            get_rect_sprite(rect, sprite))
+        # plane.get_sprite()
 
-        plane.get_sprite()
         return plane
 
 
 class FightingAircraftGame:
     def __init__(self):
-        self.exit_event = threading.Event()
+        # 游戏必要的参数配置
         self.player_id = 0
-        self.local_time_stamp = 0
-        self.update_frames = []
         self.game_name = "FightingAircraft"
         self.game_window_size = 1080, 720  # 设置窗口大小
-        self.clock = pg.time.Clock()
+        self.map_size = np.zeros((2,))
+        # 游戏的资源加载
         self.game_resources = GameResources()
         self.game_render = GameRender()
         self.player_plane = None
+        # 游戏的渲染
         self.screen = None
-        self.map_size = np.zeros((2,))
-        self.fps_render = 30
-        self.fps_physics = 30
+        # 游戏网络连接
         self.client = TcpClientTools()
+        # 游戏的用户输入
         self.key_states = {pg.K_UP: False,
                            pg.K_DOWN: False,
                            pg.K_LEFT: False,
@@ -307,80 +314,211 @@ class FightingAircraftGame:
                            pg.K_a: False,
                            pg.K_s: False,
                            pg.K_d: False}
-        self.lock = threading.RLock()  # 线程锁，保证渲染和物理运算的顺序
+        # 游戏运行的帧率和时钟控制
+        self.fps_render = 60  # 渲染帧
+        self.fps_physics = 30  # 逻辑帧
+        self.fps_sync = 30  # 同步帧
         self.clock_render = pg.time.Clock()  # 渲染线程的时钟
-        self.thread_render = threading.Thread(target=self.render, daemon=True)
-        self.render_delta_time = 0
-        self.recv_server_signal = False
+        self.clock_sync = pg.time.Clock()
+        self.clock_fixed_update = pg.time.Clock()
+        self.render_frame_idx = 0
+        # 游戏多线程创建及同步控制
+        self.local_physic_time_stamp = 0    # 物理运行的帧率计数
+        self.local_render_time_stamp = 0    # 渲染运行的帧率计数
+        self.local_sync_time_stamp = 0      # 同步帧的帧数计数
+        self.sync_frames_cache = []
+        self.history_frames = []
         self.is_game_ready = False
-
+        self.exit_event = threading.Event()
+        self.lock = threading.RLock()  # 线程锁，保证渲染和物理运算的顺序
+        self.thread_render = None           # 渲染线程
+        self.thread_fixed_update = None     # 逻辑运算线程
         # 为了便于更新内容，创建了三个组，分别是：所有飞机，敌方飞机，我方飞机
-        # self.all_planes_group = pygame.sprite.Group()
         self.id_plane_mapping: Dict[int, AirPlane] = {}
         self.team1_group = pygame.sprite.Group()
         self.team2_group = pygame.sprite.Group()
+
+        self.time_stamp_delay = 0
 
     def init_game(self):
         """
         初始化游戏的一些必要组件，例如网络和资源加载
         :return:
         """
+        '''
+        游戏整体设计：
+        1. 同步帧：
+        逻辑帧整体处理用户输入及服务器同步
+        2. 逻辑帧
+        逻辑帧整体处理在指定用户输入下的逻辑运算
+        3. 渲染帧
+        渲染帧整体处理在指定的逻辑运算情境下渲染的精细程度
+        主函数步骤设计：
+        
+        '''
         pg.init()  # 初始化pg
         self.screen = pg.display.set_mode(self.game_window_size)  # 显示窗口
         pg.display.set_caption(self.game_name)
-        self.fps_render = 30
         # 解决输入法问题
         # 模拟按下 Shift 键
         pyautogui.keyDown('shift')
+        # 暂停 0.01s
+        pyautogui.sleep(0.01)
         # 松开 Shift 键
         pyautogui.keyUp('shift')
 
         # 连接网络并发送匹配请求
         self.client.set_callback_fun(self.callback_recv)
-        self.recv_server_signal = True
-        self.client.connect_to_server('172.21.152.184', 4444)
+        self.client.connect_to_server('172.21.2.148', 4444)
         data = {
             "command": CommandType.cmd_login.value,
             "player_id": self.player_id,
             "plane_name": random.choice(list(self.game_resources.airplane_info_map.keys()))
-            # "plane_name": 'Bf110'
+            # "plane_name": 'P40'
         }
         # random.choice(list(self.game_resources.airplane_info_map.keys()))
         self.client.send(json.dumps(data), pack_data=True, data_type=DataType.TypeString)
         # self.client.send(json.dumps({'command': CommandType.cmd_none.value}), pack_data=True, data_type=DataType.TypeString)
 
         # 设置渲染线程为子线程
+        self.thread_render = threading.Thread(target=self.render, daemon=True)
+        self.thread_fixed_update = threading.Thread(target=self.fixed_update, daemon=True)
         self.thread_render.start()
-        clk = pg.time.Clock()
-        while True:
-            self.input_manager()  # 输入管理
-            if self.is_game_ready:
-                # 当接收到游戏开始的信息后进入到运行游戏的函数
-                self.run_game()
-            clk.tick(self.fps_physics)  # 获取时间差，控制帧率
+        self.thread_fixed_update.start()
 
-    def run_game(self):
+        while True:
+            # 游戏没开始的话就处理输入内容，防止程序假死
+            self.input_manager()  # 输入管理
+            self.clock_sync.tick(self.fps_sync)  # 获取时间差，控制帧率
+
+    def fixed_update(self):
         """
         运行主游戏逻辑：
         针对网络发送的运行数据，本地接收时间是不固定的，但是必须要用固定的时间间隔去运行这些不固定间隔的数据
         :return:
         """
-        delta_time = 1000 / self.fps_physics   # 物理运行的速度应该是固定的服务器的间隔
+        delta_time = np.round(1000 / self.fps_physics, decimals=2)   # 物理运行的速度应该是固定的服务器的间隔，为了保证统一，保留两位小数
 
         # 此处只有物理运行，关于图形渲染是一个新的单独的线程
-        while self.is_game_ready:
-            self.lock.acquire()
-            # 首先要刷新渲染的起始时间
-            self.render_delta_time = 0
-            # 运行完毕所有的在这段时间内接收到的数据帧
-            for frame in self.update_frames:
-                if frame['time_stamp'] >= self.local_time_stamp:
-                    # 物理运算应该包含物理运算的帧内容和时间间隔
-                    self.fixed_update(frame=frame, delta_time=delta_time)  # 物理运算
-                self.update_frames.remove(frame)
-            self.lock.release()
-            self.input_manager()  # 输入管理
-            self.clock.tick(self.fps_physics)  # 获取时间差，控制帧率
+        while not self.exit_event.is_set():
+            if self.is_game_ready:
+                self.lock.acquire()
+                # 首先要刷新渲染的起始时间
+                self.render_frame_idx = 0
+                '''
+                此处的逻辑应该是首先检查服务器那边发过来同步帧的缓存数量是否大于1，如果大于1的话就得尽快运行到缓存还剩1的那个状态，
+                假如同步帧和逻辑帧之间的倍数为3，那么缓存为1表示还有5个逻辑帧的时间接收下一个同步帧
+                处理方式：
+                如果此时缓存帧有1个，那么运行速度按照客户端正常的逻辑渲染速度
+                # --------------------------------
+                self.sync_frames_cache:
+                {"command": CommandType.cmd_frame_update.value,
+                  'sync_time_stamp': 0,
+                  "actions": [
+                        "player_id": action
+                        ...
+                  ]}
+                '''
+                frame_step = self.fps_physics / self.fps_sync
+                for sync_frame in self.sync_frames_cache[:-1]:
+                    # 如果需要同步用户输入，就同步用户输入
+                    sync_2_physic_frame = sync_frame['sync_time_stamp'] * frame_step
+                    if (self.local_physic_time_stamp % frame_step == 0
+                            and self.local_physic_time_stamp == sync_2_physic_frame):
+                        # if self.local_physic_time_stamp == self.sync_frames_cache[0]['sync_time_stamp'] * 4:
+                        # 先更新飞机的输入状态
+                        actions = sync_frame['actions']
+                        # print('time delay: {}'.format(time.time() - self.time_stamp_delay))
+                        # 新逻辑：遍历，没有输入的把输入设置为None
+                        for key, value in self.id_plane_mapping.items():
+                            key = str(key)
+                            if key in actions.keys():
+                                value.input_state = InputState(actions[key])
+                            else:
+                                value.input_state = InputState.NoInput
+                        # # 旧逻辑：从有输入的action中更新操作
+                        # for key in actions.keys():
+                        #     plane = self.id_plane_mapping[int(key)]
+                        #     plane.input_state = InputState(actions[key])
+
+                    # 一直运行直到达到目前最新的帧
+                    while sync_2_physic_frame > self.local_physic_time_stamp:
+                        # 正常情境下继续更新物理运算
+                        # 然后遍历飞机的飞行状态
+                        for plane in self.id_plane_mapping.values():
+                            pos, _ = plane.fixed_update(delta_time=delta_time)
+                            plane.set_position(pos)
+                            # 所有发射的弹药也得 move
+                            for bullet in plane.bullet_group:
+                                pos, _ = bullet.move(delta_time=delta_time)
+                                bullet.set_position(pos)
+                                if bullet.time_passed >= bullet.life_time:
+                                    plane.bullet_group.remove(bullet)
+                            # 进行碰撞检测
+                            crashed = {}
+                            if plane.team_number == 1:
+                                crashed = pygame.sprite.groupcollide(
+                                    plane.bullet_group, self.team2_group, False, False)
+                            elif plane.team_number == 2:
+                                crashed = pygame.sprite.groupcollide(
+                                    plane.bullet_group, self.team1_group, False, False)
+                            else:
+                                print('unknown team_number: {}'.format(plane.team_number))
+
+                            if len(crashed):
+                                for bullet in crashed:
+                                    if crashed[bullet][0].take_damage(bullet.damage):
+                                        print('enemy eliminated. ')
+                                    plane.bullet_group.remove(bullet)
+
+                        self.local_physic_time_stamp += 1
+
+                    # 删除目前已经运行的逻辑帧
+                    self.sync_frames_cache.remove(sync_frame)
+                    self.local_sync_time_stamp += 1
+
+                # 此处只剩一个同步帧，可以慢慢的运行物理逻辑等待服务器下一个同步帧的到来
+                # print('sync_time_stamp left: {}'.format(len(self.sync_frames_cache)))
+                # print('main plane input: {}'.format(self.player_plane.input_state))
+                if (len(self.sync_frames_cache) == 1 and
+                        self.sync_frames_cache[0]['sync_time_stamp'] * frame_step > self.local_physic_time_stamp):
+                    # 然后遍历飞机的飞行状态
+                    for plane in self.id_plane_mapping.values():
+                        pos, _ = plane.fixed_update(delta_time=delta_time)
+                        plane.set_position(pos)
+                        # 所有发射的弹药也得 move
+                        for bullet in plane.bullet_group:
+                            pos, _ = bullet.move(delta_time=delta_time)
+                            bullet.set_position(pos)
+                            if bullet.time_passed >= bullet.life_time:
+                                plane.bullet_group.remove(bullet)
+                        # 进行碰撞检测
+                        crashed = {}
+                        if plane.team_number == 1:
+                            crashed = pygame.sprite.groupcollide(
+                                plane.bullet_group, self.team2_group, False, False)
+                        elif plane.team_number == 2:
+                            crashed = pygame.sprite.groupcollide(
+                                plane.bullet_group, self.team1_group, False, False)
+                        else:
+                            print('unknown team_number: {}'.format(plane.team_number))
+
+                        if len(crashed):
+                            for bullet in crashed:
+                                if crashed[bullet][0].take_damage(bullet.damage):
+                                    print('enemy eliminated. ')
+                                plane.bullet_group.remove(bullet)
+
+                    self.local_physic_time_stamp += 1
+
+                print('\rserver sync time_stamp: {}, local sync time_stamp: {}, difference: {}'.format(
+                    self.sync_frames_cache[0]['sync_time_stamp'],
+                    self.local_sync_time_stamp,
+                self.sync_frames_cache[0]['sync_time_stamp']-self.local_sync_time_stamp), end='')
+                self.lock.release()
+
+            # self.input_manager()  # 输入管理
+            self.clock_fixed_update.tick(self.fps_physics)  # 获取时间差，控制帧率
 
     def callback_recv(self, cmd, params):
 
@@ -417,14 +555,15 @@ class FightingAircraftGame:
                         self.team2_group.add(new_plane)
                         self.id_plane_mapping[plane_info['player_id']] = new_plane
 
-                # self.all_planes_group.add(self.team1_group, self.team2_group)
-
+                self.local_physic_time_stamp = 0
+                # self.local_render_time_stamp = 0
                 # 进行游戏必要的同步变量设置
                 self.is_game_ready = True
             elif cmd == CommandType.cmd_frame_update:
-                self.update_frames.append(data)
+                self.sync_frames_cache.append(data)
+                self.history_frames.append(data)
         elif cmd == CallbackCommand.SocketClose:
-            print('closed')
+            print('socket closed. ')
 
     def input_manager(self):
         # 处理输入
@@ -444,50 +583,56 @@ class FightingAircraftGame:
                 if event.key in self.key_states:
                     self.key_states[event.key] = False
 
-        # print(pg.key.name(bools.index(1)))
+        # 定义一个输入状态量
+        input_state = InputState.NoInput
         if self.key_states[pg.K_UP] or self.key_states[pg.K_w]:
-            # start_point[1] -= step
-            self.player_plane.speed_up()
+            input_state = input_state | InputState.SpeedUp
+            # self.player_plane.speed_up()
         elif self.key_states[pg.K_DOWN] or self.key_states[pg.K_s]:
-            # start_point[1] += step
-            self.player_plane.slow_down()
+            input_state = input_state | InputState.SlowDown
+            # self.player_plane.slow_down()
         if self.key_states[pg.K_LEFT] or self.key_states[pg.K_a]:
-            # start_point[0] -= step
-            self.player_plane.turn_left()
+            input_state = input_state | InputState.TurnLeft
+            # self.player_plane.turn_left()
         elif self.key_states[pg.K_RIGHT] or self.key_states[pg.K_d]:
-            # start_point[0] += step
-            self.player_plane.turn_right()
+            input_state = input_state | InputState.TurnRight
+            # self.player_plane.turn_right()
         elif self.key_states[pg.K_q]:
-            # start_point[0] += step
-            self.player_plane.sharply_turn_left()
+            input_state = input_state | InputState.SharpTurnLeft
+            # self.player_plane.sharply_turn_left()
         elif self.key_states[pg.K_e]:
-            # start_point[0] += step
-            self.player_plane.sharply_turn_right()
+            input_state = input_state | InputState.SharpTurnRight
+            # self.player_plane.sharply_turn_right()
         elif self.key_states[pg.K_SPACE]:
-            # start_point[0] += step
-            self.player_plane.pitch()
+            if self.player_plane.plane_type != PlaneType.Bomber:
+                input_state = input_state | InputState.Pitch
+            # self.player_plane.pitch()
         elif self.key_states[pg.K_f]:
-            # start_point[0] += step
-            self.player_plane.roll()
+            input_state = input_state | InputState.Roll
+            # self.player_plane.roll()
 
         if self.key_states[pg.K_j]:
-            # start_point[0] += step
-            self.player_plane.primary_fire()
+            input_state = input_state | InputState.PrimaryWeaponAttack
+            # self.player_plane.primary_fire()
         elif self.key_states[pg.K_k]:
-            # start_point[0] += step
-            self.player_plane.secondary_fire()
+            input_state = input_state | InputState.SecondaryWeaponAttack
+            # self.player_plane.secondary_fire()
 
         if self.is_game_ready:
             data = {
                 "command": CommandType.cmd_player_action.value,
                 "match_id": 0,
                 "player_id": self.player_id,
-                "action": self.player_plane.input_state.value
+                "action": input_state.value
             }
-            self.player_plane.input_state = InputState.NoInput
-            self.client.send(json.dumps(data), pack_data=True, data_type=DataType.TypeString)
 
-    def fixed_update(self, frame, delta_time):
+            # 注意同步数据
+            self.lock.acquire()
+            self.time_stamp_delay = time.time()
+            self.client.send(json.dumps(data), pack_data=True, data_type=DataType.TypeString)
+            self.lock.release()
+
+    def fixed_update_deprecated(self, frame, delta_time):
         """
         用于更新物理计算
         :param delta_time: ms
@@ -526,77 +671,85 @@ class FightingAircraftGame:
                         print('enemy eliminated. ')
                     plane.bullet_group.remove(bullet)
 
-        self.local_time_stamp += 1
+        # self.local_time_stamp += 1
+        print('\rhistory frames: {}, server_time_stamp - local_time_stamp: {}'.format(
+            len(self.history_frames), frame['time_stamp'] - self.local_physic_time_stamp
+        ), end='')
 
     def render(self):
         print('render thread started. ')
-        delta_time = 1 / self.fps_render
-        self.render_delta_time = 0
+        render_frame_time_diff = np.round(1000 / self.fps_render, decimals=2)
+        self.render_frame_idx = 0
         font = pg.font.Font(None, 36)
         self.game_render.draw_collision_box = False
         self.game_render.set_screen(self.screen)
+        render_frame_count = self.fps_render / self.fps_physics
 
         while not self.exit_event.is_set():
             self.lock.acquire()
             if self.is_game_ready:
-                self.render_delta_time += delta_time
-                pos, dir_v = self.player_plane.move(delta_time=self.render_delta_time)
-                self.game_render.render_map(pos, screen=self.screen)
-                text = font.render(
-                    'Engine temperature: {:.2f}, Speed: {:.2f}, position: [{:.2f}, {:.2f}]'.format(
-                        self.player_plane.get_engine_temperature(), self.player_plane.velocity,
-                        pos[0], pos[1]),
-                    True, (0, 0, 0))
-                for plane in self.team1_group:
-                    self.game_render.render_plane(plane=plane, team_id=1, delta_time=delta_time)
-                    # print('\r obj count: {}'.format(len(self.player_plane.bullet_list)), end='')
-                    for bullet in plane.bullet_group:
-                        self.game_render.render_bullet(bullet=bullet)
-                for plane in self.team2_group:
-                    # pos, dir_v = plane.move(delta_time=self.render_delta_time)
-                    self.game_render.render_plane(plane=plane, team_id=2, delta_time=delta_time)
-                    # print('\r obj count: {}'.format(len(self.player_plane.bullet_list)), end='')
-                    for bullet in plane.bullet_group:
-                        self.game_render.render_bullet(bullet=bullet)
+                # 首先判断程序目前渲染帧数，拒绝提前渲染，不然会出现不必要的抖动
+                if self.render_frame_idx < render_frame_count:
+                    # self.render_frame_idx += delta_time
+                    delta_time = self.render_frame_idx * render_frame_time_diff
+                    pos, dir_v = self.player_plane.move(delta_time=delta_time)
+                    self.game_render.render_map(pos, screen=self.screen)
+                    text = font.render(
+                        'Engine temperature: {:.2f}, Speed: {:.2f}, position: [{:.2f}, {:.2f}]'.format(
+                            self.player_plane.get_engine_temperature(), self.player_plane.velocity,
+                            pos[0], pos[1]),
+                        True, (0, 0, 0))
+                    for plane in self.team1_group:
+                        self.game_render.render_plane(plane=plane, team_id=1, delta_time=delta_time)
+                        # print('\r obj count: {}'.format(len(self.player_plane.bullet_list)), end='')
+                        for bullet in plane.bullet_group:
+                            self.game_render.render_bullet(bullet=bullet, delta_time=delta_time)
+                    for plane in self.team2_group:
+                        # pos, dir_v = plane.move(delta_time=self.render_delta_time)
+                        self.game_render.render_plane(plane=plane, team_id=2, delta_time=delta_time)
+                        # print('\r obj count: {}'.format(len(self.player_plane.bullet_list)), end='')
+                        for bullet in plane.bullet_group:
+                            self.game_render.render_bullet(bullet=bullet, delta_time=delta_time)
 
-                # 将文本绘制到屏幕上
-                self.screen.blit(text, (10, 10))
-                # 然后在右上角显示小地图
-                thumbnail_map_sprite_rect = self.game_resources.thumbnail_map_sprite.get_rect()
-                thumbnail_map_render_left = self.game_window_size[0] - thumbnail_map_sprite_rect.width
-                self.screen.blit(
-                    self.game_resources.thumbnail_map_sprite,
-                    (thumbnail_map_render_left, 0))
-                scale = thumbnail_map_sprite_rect.width / self.map_size[0]
-                # 然后根据小地图的位置来显示不同的飞机在缩略图中的位置
-                for plane in self.team1_group:
-                    pos = plane.get_position()
-                    pygame.draw.circle(
-                        self.screen, (0, 255, 0),
-                        (thumbnail_map_render_left + pos[0]*scale,
-                         pos[1]*scale), 2)
-                for plane in self.team2_group:
-                    pos = plane.get_position()
-                    pygame.draw.circle(
+                    # 将文本绘制到屏幕上
+                    self.screen.blit(text, (10, 10))
+                    # 然后在右上角显示小地图
+                    thumbnail_map_sprite_rect = self.game_resources.thumbnail_map_sprite.get_rect()
+                    thumbnail_map_render_left = self.game_window_size[0] - thumbnail_map_sprite_rect.width
+                    self.screen.blit(
+                        self.game_resources.thumbnail_map_sprite,
+                        (thumbnail_map_render_left, 0))
+                    scale = thumbnail_map_sprite_rect.width / self.map_size[0]
+                    # 然后根据小地图的位置来显示不同的飞机在缩略图中的位置
+                    for plane in self.team1_group:
+                        pos = plane.get_position()
+                        pygame.draw.circle(
+                            self.screen, (0, 255, 0),
+                            (thumbnail_map_render_left + pos[0]*scale,
+                             pos[1]*scale), 2)
+                    for plane in self.team2_group:
+                        pos = plane.get_position()
+                        pygame.draw.circle(
+                            self.screen, (255, 0, 0),
+                            (thumbnail_map_render_left + pos[0]*scale,
+                             pos[1]*scale), 2)
+                    # 然后绘制框框
+                    pos = self.player_plane.get_position()
+                    pygame.draw.rect(
                         self.screen, (255, 0, 0),
-                        (thumbnail_map_render_left + pos[0]*scale,
-                         pos[1]*scale), 2)
-                # 然后绘制框框
-                pos = self.player_plane.get_position()
-                pygame.draw.rect(
-                    self.screen, (255, 0, 0),
-                    (thumbnail_map_render_left + (pos[0]-0.5*self.game_window_size[0])*scale,
-                         (pos[1]-0.5*self.game_window_size[1])*scale,
-                     self.game_window_size[0]*scale,
-                     self.game_window_size[1]*scale), 2)
+                        (thumbnail_map_render_left + (pos[0]-0.5*self.game_window_size[0])*scale,
+                             (pos[1]-0.5*self.game_window_size[1])*scale,
+                         self.game_window_size[0]*scale,
+                         self.game_window_size[1]*scale), 2)
 
+                    self.render_frame_idx += 1
             else:
                 # 清屏
                 self.screen.fill((255, 255, 255))
             pg.display.flip()  # 更新全部显示
             self.lock.release()
-            delta_time = self.clock_render.tick(self.fps_render)
-            # delta_time = 30
+            self.clock_render.tick(self.fps_render)
+            # delta_time = 1000 / self.fps_render
 
 
 if __name__ == '__main__':
