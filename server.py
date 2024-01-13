@@ -116,10 +116,10 @@ class FightingAircraftGameServer:
                             self.player_id_2_player_info[player_id]['tcp_client'])
                         start_data["planes"].append(
                             {"player_id": player_id,
-                             # "position_x": random.random() * 5000,
-                             # "position_y": random.random() * 5000,
-                             "position_x": 5000,
-                             "position_y": 5000,
+                             "position_x": random.random() * 5000,
+                             "position_y": random.random() * 5000,
+                             # "position_x": 5000,
+                             # "position_y": 5000,
                              'plane_name': info['plane_name']})
 
                     self.room_info_map[room_number] = {'tcp_list': room_player_tcp_list,
@@ -188,9 +188,9 @@ class FightingAircraftGameServer:
 
             self.lock.release()
             # 保证服务器以 30FPS 的速度转播玩家操作
-            self.clock.tick(30)
+            self.clock.tick(15)
 
-            print('\rserver FPS: {}'.format(1/(time.time()-old_time + 1e-10)), end='')
+            # print('\rserver FPS: {}'.format(1/(time.time()-old_time + 1e-10)), end='')
 
 
 if __name__ == '__main__':

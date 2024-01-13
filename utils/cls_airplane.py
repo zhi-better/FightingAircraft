@@ -369,13 +369,15 @@ class AirPlane(DynamicObject):
                     self.air_plane_params.engine_heat_rate = -0.3
             else:
                 self.air_plane_params.engine_heat_rate = -0.3
-        self._engine_temperature = np.minimum(
-            100, np.maximum(0, self._engine_temperature + self.air_plane_params.engine_heat_rate * delta_time * 0))
         # self._engine_temperature = np.minimum(
-        #     100, np.maximum(0, self._engine_temperature + self.engine_heat_rate * delta_time * 0.02))
+        #     100, np.maximum(0, self._engine_temperature + self.air_plane_params.engine_heat_rate * delta_time * 0))
+        self._engine_temperature = np.minimum(
+            100, np.maximum(0, self._engine_temperature + self.air_plane_params.engine_heat_rate * delta_time * 0.02))
         self.heat_counter += 1
         self.air_plane_params.engine_heat_rate = 0
 
+        # ---------------------------------------------
+        # 主武器攻击
         if self.input_state & InputState.PrimaryWeaponAttack:
             if self.primary_weapon_reload_counter <= 0:
                 self.primary_weapon_attack()
@@ -387,7 +389,8 @@ class AirPlane(DynamicObject):
                 self.primary_weapon_reload_counter = 0
             else:
                 self.primary_weapon_reload_counter -= delta_time * 0.001
-
+        # ---------------------------------------------
+        # 副武器攻击
         if self.input_state & InputState.SecondaryWeaponAttack:
             if self.secondary_weapon_reload_counter <= 0:
                 self.secondary_weapon_attack()
@@ -401,19 +404,11 @@ class AirPlane(DynamicObject):
                 self.secondary_weapon_reload_counter -= delta_time * 0.001
 
         # --------------------------------------------------------------------
-        # # 重置飞行状态
-        # self.input_state = InputState.NoInput
+        # 重置飞行状态
+        self.input_state = InputState.NoInput
 
         pos, direction_vector = self.move(delta_time=delta_time)
         self.direction_vector = direction_vector
-        # self.set_position(pos)
-
-        # for bullet in self.bullet_group:
-        #     pos, _ = bullet.move(delta_time=delta_time)
-        #     bullet.set_position(pos)
-        #     if bullet.time_passed >= bullet.life_time:
-        #         self.bullet_group.remove(bullet)
-                # print('bullet removed. ')
 
         return pos, self.get_angle(self.direction_vector)
 
@@ -450,7 +445,7 @@ class AirPlane(DynamicObject):
         local_position[1] = np.cos(np.radians(self.roll_attitude * 10)) * local_position[1]
         new_bullet.set_position(local_to_world(
             self.get_position(), direction, local_point=local_position))
-        new_bullet.set_speed(self.velocity + 3)
+        new_bullet.set_speed(self.velocity + 5)
         new_bullet.set_direction_vector(direction)
         new_bullet.damage = 10
         self.bullet_group.add(new_bullet)
@@ -474,7 +469,7 @@ class FighterJet(AirPlane):
         self.reload_time = 1
 
     def primary_weapon_attack(self):
-        height_start = self.air_plane_params.plane_height * 0.3
+        height_start = self.air_plane_params.plane_height * 0.4
         position_list = [[height_start, self.air_plane_params.plane_height * 0.3],
                          [height_start, self.air_plane_params.plane_height * 0.1],
                          [height_start, -self.air_plane_params.plane_height * 0.1],
@@ -485,7 +480,7 @@ class FighterJet(AirPlane):
                 self.air_plane_sprites.primary_bullet_sprite, np.array(pos), self.direction_vector)
 
     def secondary_weapon_attack(self):
-        position_list = [[self.air_plane_params.plane_height * 0.5, 0]]
+        position_list = [[self.air_plane_params.plane_height * 0.4, 0]]
 
         for pos in position_list:
             self.create_bullet(self.air_plane_sprites.secondary_bullet_sprite, np.array(pos), self.direction_vector)
@@ -513,7 +508,7 @@ class Bomber(AirPlane):
         self.reload_time = 1
 
     def primary_weapon_attack(self):
-        height_start = self.air_plane_params.plane_height * 0.3
+        height_start = self.air_plane_params.plane_height * 0.4
         position_list = [[height_start, self.air_plane_params.plane_height * 0.3],
                          [height_start, self.air_plane_params.plane_height * 0.1],
                          [height_start, -self.air_plane_params.plane_height * 0.1],
@@ -524,7 +519,7 @@ class Bomber(AirPlane):
                 self.air_plane_sprites.primary_bullet_sprite, np.array(pos), self.direction_vector)
 
     def secondary_weapon_attack(self):
-        position_list = [[self.air_plane_params.plane_height * 0.5, 0]]
+        position_list = [[self.air_plane_params.plane_height * 0.4, 0]]
 
         for pos in position_list:
             self.create_bullet(self.air_plane_sprites.secondary_bullet_sprite, np.array(pos), self.direction_vector)

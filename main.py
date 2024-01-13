@@ -354,9 +354,9 @@ class FightingAircraftGame:
                            pg.K_s: False,
                            pg.K_d: False}
         # 游戏运行的帧率和时钟控制
-        self.fps_render = 30  # 渲染帧
+        self.fps_render = 60  # 渲染帧
         self.fps_physics = 30  # 逻辑帧
-        self.fps_sync = 30  # 同步帧
+        self.fps_sync = 15  # 同步帧
         self.clock_render = pg.time.Clock()  # 渲染线程的时钟
         self.clock_sync = pg.time.Clock()
         self.clock_fixed_update = pg.time.Clock()
@@ -411,7 +411,7 @@ class FightingAircraftGame:
 
         # 连接网络并发送匹配请求
         self.client.set_callback_fun(self.callback_recv)
-        self.client.connect_to_server('172.21.2.148', 4444)
+        self.client.connect_to_server('172.21.174.158', 4444)
         data = {
             "command": CommandType.cmd_login.value,
             "player_id": self.player_id,
@@ -462,12 +462,15 @@ class FightingAircraftGame:
                   ]}
                 '''
                 frame_step = self.fps_physics / self.fps_sync
+
+                # 此处处理的是快进环节，可以在数据包堆积的时候快进处理没跟上的同步帧数据
                 for sync_frame in self.sync_frames_cache[:-1]:
                     # 如果需要同步用户输入，就同步用户输入
                     sync_2_physic_frame = sync_frame['sync_time_stamp'] * frame_step
-                    if (self.local_physic_time_stamp % frame_step == 0
-                            and self.local_physic_time_stamp == sync_2_physic_frame):
-                        # if self.local_physic_time_stamp == self.sync_frames_cache[0]['sync_time_stamp'] * 4:
+                    # if (self.local_physic_time_stamp % frame_step == 0
+                    #         and self.local_physic_time_stamp == sync_2_physic_frame):
+                    while (sync_frame['sync_time_stamp'] - 1) * frame_step < self.local_physic_time_stamp <= sync_2_physic_frame:
+                        # =================================================================
                         # 先更新飞机的输入状态
                         actions = sync_frame['actions']
                         # print('time delay: {}'.format(time.time() - self.time_stamp_delay))
@@ -478,17 +481,12 @@ class FightingAircraftGame:
                                 value.input_state = InputState(actions[key])
                             else:
                                 value.input_state = InputState.NoInput
-                        # # 旧逻辑：从有输入的action中更新操作
-                        # for key in actions.keys():
-                        #     plane = self.id_plane_mapping[int(key)]
-                        #     plane.input_state = InputState(actions[key])
-
-                    # 一直运行直到达到目前最新的帧
-                    while sync_2_physic_frame > self.local_physic_time_stamp:
                         # =================================================================
                         # 物理运算
                         # 然后遍历飞机的飞行状态
                         for plane in self.id_plane_mapping.values():
+                            # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+                            # 注意此处在运行完毕后 会重置 对应的飞机的飞行状态
                             pos, _ = plane.fixed_update(delta_time=delta_time)
                             plane.set_position(pos)
                             self.logger.debug(
@@ -516,7 +514,6 @@ class FightingAircraftGame:
                                     if crashed[bullet][0].take_damage(bullet.damage):
                                         print('enemy eliminated. ')
                                     plane.bullet_group.remove(bullet)
-
                         self.local_physic_time_stamp += 1
 
                     # 删除目前已经运行的逻辑帧
@@ -529,7 +526,7 @@ class FightingAircraftGame:
                 # print('sync_time_stamp left: {}'.format(len(self.sync_frames_cache)))
                 # print('main plane input: {}'.format(self.player_plane.input_state))
                 if (len(self.sync_frames_cache) == 1 and
-                        self.sync_frames_cache[0]['sync_time_stamp'] * frame_step > self.local_physic_time_stamp):
+                        self.sync_frames_cache[0]['sync_time_stamp'] * frame_step >= self.local_physic_time_stamp):
                     # 先更新飞机的输入状态
                     actions = self.sync_frames_cache[0]['actions']
                     # print('time delay: {}'.format(time.time() - self.time_stamp_delay))
