@@ -1,5 +1,6 @@
 import base64
 import json
+import logging
 import os
 import random
 import struct
@@ -22,6 +23,44 @@ from utils.SocketTcpTools import *
 from utils.cls_airplane import *
 from utils.cls_game_render import *
 
+def setup_logging(log_file_path):
+    """
+    设置日志记录，将日志同时输出到控制台和文件中
+
+    Parameters:
+    - log_file_path (str): 日志文件路径
+
+    Returns:
+    - logging.Logger: 配置好的Logger对象
+    """
+    # 删除已存在的日志文件
+    if os.path.exists(log_file_path):
+        os.remove(log_file_path)
+
+    # 创建Logger对象
+    logger = logging.getLogger('my_logger')
+    logger.setLevel(logging.DEBUG)
+
+    # 创建文件处理器并设置级别为DEBUG
+    file_handler = logging.FileHandler(log_file_path)
+    file_handler.setLevel(logging.DEBUG)
+
+    # 创建控制台处理器并设置级别为INFO
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(logging.INFO)
+
+    # 创建格式化器
+    formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+
+    # 将格式化器添加到处理器
+    file_handler.setFormatter(formatter)
+    console_handler.setFormatter(formatter)
+
+    # 将处理器添加到Logger对象
+    logger.addHandler(file_handler)
+    logger.addHandler(console_handler)
+
+    return logger
 
 class CommandType(Enum):
     cmd_none = 0
@@ -315,7 +354,7 @@ class FightingAircraftGame:
                            pg.K_s: False,
                            pg.K_d: False}
         # 游戏运行的帧率和时钟控制
-        self.fps_render = 60  # 渲染帧
+        self.fps_render = 30  # 渲染帧
         self.fps_physics = 30  # 逻辑帧
         self.fps_sync = 30  # 同步帧
         self.clock_render = pg.time.Clock()  # 渲染线程的时钟
@@ -323,22 +362,24 @@ class FightingAircraftGame:
         self.clock_fixed_update = pg.time.Clock()
         self.render_frame_idx = 0
         # 游戏多线程创建及同步控制
-        self.local_physic_time_stamp = 0    # 物理运行的帧率计数
-        self.local_render_time_stamp = 0    # 渲染运行的帧率计数
-        self.local_sync_time_stamp = 0      # 同步帧的帧数计数
+        self.local_physic_time_stamp = 0  # 物理运行的帧率计数
+        self.local_render_time_stamp = 0  # 渲染运行的帧率计数
+        self.local_sync_time_stamp = 0  # 同步帧的帧数计数
         self.sync_frames_cache = []
         self.history_frames = []
         self.is_game_ready = False
         self.exit_event = threading.Event()
         self.lock = threading.RLock()  # 线程锁，保证渲染和物理运算的顺序
-        self.thread_render = None           # 渲染线程
-        self.thread_fixed_update = None     # 逻辑运算线程
+        self.thread_render = None  # 渲染线程
+        self.thread_fixed_update = None  # 逻辑运算线程
         # 为了便于更新内容，创建了三个组，分别是：所有飞机，敌方飞机，我方飞机
         self.id_plane_mapping: Dict[int, AirPlane] = {}
         self.team1_group = pygame.sprite.Group()
         self.team2_group = pygame.sprite.Group()
 
         self.time_stamp_delay = 0
+        self.logger_file_name = 'run_physic.log'
+        self.logger = None
 
     def init_game(self):
         """
@@ -356,6 +397,7 @@ class FightingAircraftGame:
         主函数步骤设计：
         
         '''
+        self.logger = setup_logging(self.logger_file_name)
         pg.init()  # 初始化pg
         self.screen = pg.display.set_mode(self.game_window_size)  # 显示窗口
         pg.display.set_caption(self.game_name)
@@ -397,7 +439,7 @@ class FightingAircraftGame:
         针对网络发送的运行数据，本地接收时间是不固定的，但是必须要用固定的时间间隔去运行这些不固定间隔的数据
         :return:
         """
-        delta_time = np.round(1000 / self.fps_physics, decimals=2)   # 物理运行的速度应该是固定的服务器的间隔，为了保证统一，保留两位小数
+        delta_time = np.round(1000 / self.fps_physics, decimals=2)  # 物理运行的速度应该是固定的服务器的间隔，为了保证统一，保留两位小数
 
         # 此处只有物理运行，关于图形渲染是一个新的单独的线程
         while not self.exit_event.is_set():
@@ -443,11 +485,15 @@ class FightingAircraftGame:
 
                     # 一直运行直到达到目前最新的帧
                     while sync_2_physic_frame > self.local_physic_time_stamp:
-                        # 正常情境下继续更新物理运算
+                        # =================================================================
+                        # 物理运算
                         # 然后遍历飞机的飞行状态
                         for plane in self.id_plane_mapping.values():
                             pos, _ = plane.fixed_update(delta_time=delta_time)
                             plane.set_position(pos)
+                            self.logger.debug(
+                                json.dumps({'physic_frame': self.local_physic_time_stamp, 'input': plane.input_state,
+                                            'id': plane.air_plane_params.id}))
                             # 所有发射的弹药也得 move
                             for bullet in plane.bullet_group:
                                 pos, _ = bullet.move(delta_time=delta_time)
@@ -474,6 +520,8 @@ class FightingAircraftGame:
                         self.local_physic_time_stamp += 1
 
                     # 删除目前已经运行的逻辑帧
+                    self.logger.debug(
+                        json.dumps({'physic_frame': self.local_physic_time_stamp, 'actions': sync_frame['actions']}))
                     self.sync_frames_cache.remove(sync_frame)
                     self.local_sync_time_stamp += 1
 
@@ -482,10 +530,25 @@ class FightingAircraftGame:
                 # print('main plane input: {}'.format(self.player_plane.input_state))
                 if (len(self.sync_frames_cache) == 1 and
                         self.sync_frames_cache[0]['sync_time_stamp'] * frame_step > self.local_physic_time_stamp):
+                    # 先更新飞机的输入状态
+                    actions = self.sync_frames_cache[0]['actions']
+                    # print('time delay: {}'.format(time.time() - self.time_stamp_delay))
+                    # 新逻辑：遍历，没有输入的把输入设置为None
+                    for key, value in self.id_plane_mapping.items():
+                        key = str(key)
+                        if key in actions.keys():
+                            value.input_state = InputState(actions[key])
+                        else:
+                            value.input_state = InputState.NoInput
+                    # =================================================================
+                    # 物理运算
                     # 然后遍历飞机的飞行状态
                     for plane in self.id_plane_mapping.values():
                         pos, _ = plane.fixed_update(delta_time=delta_time)
                         plane.set_position(pos)
+                        self.logger.debug(
+                            json.dumps({'physic_frame': self.local_physic_time_stamp, 'input': plane.input_state,
+                                        'id': plane.air_plane_params.id}))
                         # 所有发射的弹药也得 move
                         for bullet in plane.bullet_group:
                             pos, _ = bullet.move(delta_time=delta_time)
@@ -511,10 +574,10 @@ class FightingAircraftGame:
 
                     self.local_physic_time_stamp += 1
 
-                print('\rserver sync time_stamp: {}, local sync time_stamp: {}, difference: {}'.format(
-                    self.sync_frames_cache[0]['sync_time_stamp'],
-                    self.local_sync_time_stamp,
-                self.sync_frames_cache[0]['sync_time_stamp']-self.local_sync_time_stamp), end='')
+                    print('\rserver sync t_s: {}, local sync t_s: {}, difference: {}'.format(
+                        self.sync_frames_cache[0]['sync_time_stamp'],
+                        self.local_sync_time_stamp,
+                        self.sync_frames_cache[0]['sync_time_stamp'] - self.local_sync_time_stamp), end='')
                 self.lock.release()
 
             # self.input_manager()  # 输入管理
@@ -530,6 +593,7 @@ class FightingAircraftGame:
                 self.player_id = data['player_id']
             elif cmd == CommandType.cmd_matching_successful:
                 print('matching successfully. ')
+                self.lock.acquire()
                 # 加载地图
                 self.game_render.game_window_size = np.array(self.game_window_size).reshape((2,))
                 map_xml_name, _ = self.game_resources.get_map(data['map_id'])
@@ -543,6 +607,7 @@ class FightingAircraftGame:
                         self.player_plane = self.game_resources.get_plane(plane_info['plane_name'])
                         self.player_plane.set_map_size(self.map_size)
                         self.player_plane.set_position(np.array([plane_info['position_x'], plane_info['position_y']]))
+                        self.player_plane.air_plane_params.id = plane_info['player_id']
                         self.player_plane.team_number = 1
                         self.team1_group.add(self.player_plane)
                         self.id_plane_mapping[plane_info['player_id']] = self.player_plane
@@ -550,7 +615,7 @@ class FightingAircraftGame:
                         new_plane = self.game_resources.get_plane(plane_info['plane_name'])
                         new_plane.set_map_size(self.map_size)
                         new_plane.set_position(np.array([plane_info['position_x'], plane_info['position_y']]))
-
+                        new_plane.air_plane_params.id = plane_info['player_id']
                         new_plane.team_number = 2
                         self.team2_group.add(new_plane)
                         self.id_plane_mapping[plane_info['player_id']] = new_plane
@@ -559,9 +624,12 @@ class FightingAircraftGame:
                 # self.local_render_time_stamp = 0
                 # 进行游戏必要的同步变量设置
                 self.is_game_ready = True
+                self.lock.release()
             elif cmd == CommandType.cmd_frame_update:
+                self.lock.acquire()
                 self.sync_frames_cache.append(data)
                 self.history_frames.append(data)
+                self.lock.release()
         elif cmd == CallbackCommand.SocketClose:
             print('socket closed. ')
 
@@ -725,22 +793,22 @@ class FightingAircraftGame:
                         pos = plane.get_position()
                         pygame.draw.circle(
                             self.screen, (0, 255, 0),
-                            (thumbnail_map_render_left + pos[0]*scale,
-                             pos[1]*scale), 2)
+                            (thumbnail_map_render_left + pos[0] * scale,
+                             pos[1] * scale), 2)
                     for plane in self.team2_group:
                         pos = plane.get_position()
                         pygame.draw.circle(
                             self.screen, (255, 0, 0),
-                            (thumbnail_map_render_left + pos[0]*scale,
-                             pos[1]*scale), 2)
+                            (thumbnail_map_render_left + pos[0] * scale,
+                             pos[1] * scale), 2)
                     # 然后绘制框框
                     pos = self.player_plane.get_position()
                     pygame.draw.rect(
                         self.screen, (255, 0, 0),
-                        (thumbnail_map_render_left + (pos[0]-0.5*self.game_window_size[0])*scale,
-                             (pos[1]-0.5*self.game_window_size[1])*scale,
-                         self.game_window_size[0]*scale,
-                         self.game_window_size[1]*scale), 2)
+                        (thumbnail_map_render_left + (pos[0] - 0.5 * self.game_window_size[0]) * scale,
+                         (pos[1] - 0.5 * self.game_window_size[1]) * scale,
+                         self.game_window_size[0] * scale,
+                         self.game_window_size[1] * scale), 2)
 
                     self.render_frame_idx += 1
             else:

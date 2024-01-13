@@ -1,6 +1,7 @@
 import json
 import queue
 import random
+import threading
 import time
 
 import pygame
@@ -67,6 +68,7 @@ class FightingAircraftGameServer:
         # self.update_frame_data = {"command": CommandType.cmd_frame_update.value,
         #                           'time_stamp': self.time_stamp,
         #                           "actions": []}
+        self.lock = threading.Lock()
         self.server_start()
 
     def server_callback(self, cmd, param):
@@ -75,6 +77,7 @@ class FightingAircraftGameServer:
         :param data:
         :return:
         """
+        self.lock.acquire()
         if cmd == CallbackCommand.RecvData:
             data = param['data']
             tcp_client = param['tcp_client']
@@ -160,6 +163,9 @@ class FightingAircraftGameServer:
                 del self.player_id_2_player_info[player_id]
                 del self.tcp_client_2_player_id[tcp_client]
 
+        # 释放线程锁
+        self.lock.release()
+
     def server_start(self):
         frame_update_template = {'command': CommandType.cmd_frame_update.value,
                                  'actions': {},
@@ -167,6 +173,7 @@ class FightingAircraftGameServer:
 
         while True:
             old_time = time.time()
+            self.lock.acquire()
             # 此处的逻辑是一个房间一个房间的发
             for key in list(self.room_info_map.keys()):
                 room_info = self.room_info_map[key]
@@ -179,6 +186,7 @@ class FightingAircraftGameServer:
                                      data_type=DataType.TypeString)
                 room_info['sync_time_stamp'] += 1
 
+            self.lock.release()
             # 保证服务器以 30FPS 的速度转播玩家操作
             self.clock.tick(30)
 

@@ -53,6 +53,7 @@ class AirPlaneSprites:
 
 class AirPlaneParams:
     def __init__(self):
+        self.id = 0
         self.name = 'AirPlane'
         self.health_points = 1000  # 生命值
         self.angular_speed = 0.8  # 转向速度

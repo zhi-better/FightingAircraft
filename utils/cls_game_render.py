@@ -88,7 +88,7 @@ class GameRender:
                 self.font = pygame.font.Font(None, 24)  # 使用默认字体，大小36
             # 在飞机上方显示生命值文本
             text_surface = self.font.render(
-                f'Health: {plane.air_plane_params.health_points}',
+                f'Health: {plane.air_plane_params.health_points}, pos_x: {np.round(pos[0], decimals=2)}, pos_y: {np.round(pos[1], decimals=2)}',
                 True, font_color)  # 黑色文本
             text_rect = text_surface.get_rect(
                 center=(plane_rect.centerx, plane_rect.centery - 0.6 * plane_rect.height))  # 设置文本位置
