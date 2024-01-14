@@ -198,14 +198,22 @@ class GameResources:
         file_name = self.maps_map[map_index]
         # 寻找最后一个点的位置，表示扩展名的开始
         last_dot_index = file_name.rfind('.')
+        scale_factor = 0.6
         # 如果找到点，并且点不在字符串的开头或结尾
         if last_dot_index != -1 and last_dot_index < len(file_name) - 1:
             # 获取扩展名前的部分
             file_base_name = file_name[:last_dot_index]
             # 将扩展名更改为 .png
             file_name_with_png = file_base_name + '.png'
+            original_image = pygame.image.load(file_name_with_png)
+            # 获取原始图像的宽度和高度
+            original_width, original_height = original_image.get_size()
+            # 计算缩放后的宽度和高度
+            scaled_width = int(original_width * scale_factor)
+            scaled_height = int(original_height * scale_factor)
+            # 使用 pygame.transform.scale 缩放图像
+            self.thumbnail_map_sprite = pygame.transform.scale(original_image, (scaled_width, scaled_height))
 
-        self.thumbnail_map_sprite = pygame.image.load(file_name_with_png)
         return self.maps_map[map_index], self.thumbnail_map_sprite
 
     def get_bullet_sprite(self, bullet_key='bullet1'):
@@ -308,15 +316,11 @@ class GameResources:
         plane.air_plane_sprites.pitch_mapping = pitch_mapping
         # 设置主武器和副武器的贴图资源
         sprite, rect = self.get_bullet_sprite('bullet' + str(param['mainweapon'] + 1))
-        # plane.air_plane_sprites.primary_bullet_sprite = (
-        #     get_rect_sprite(rect, sprite, rotate_angle=-90))
 
+        # 注意此处获取的 sprite 应该旋转 90 度
         plane.air_plane_sprites.primary_bullet_sprite = get_rect_sprite(rect, sprite)
         sprite, rect = self.get_bullet_sprite('bullet' + str(param['secondweapon']))
-        # plane.air_plane_sprites.secondary_bullet_sprite = (
-        #     get_rect_sprite(rect, sprite, rotate_angle=-90))
-        plane.air_plane_sprites.secondary_bullet_sprite = (
-            get_rect_sprite(rect, sprite))
+        plane.air_plane_sprites.secondary_bullet_sprite = get_rect_sprite(rect, sprite)
         # plane.get_sprite()
 
         return plane
@@ -360,15 +364,16 @@ class FightingAircraftGame:
         self.clock_render = pg.time.Clock()  # 渲染线程的时钟
         self.clock_sync = pg.time.Clock()
         self.clock_fixed_update = pg.time.Clock()
-        self.render_frame_idx = 0
         # 游戏多线程创建及同步控制
+        self.render_frame_idx = 0  # 从目前逻辑帧开始到当前应该运行的渲染帧下标
         self.local_physic_time_stamp = 0  # 物理运行的帧率计数
         self.local_render_time_stamp = 0  # 渲染运行的帧率计数
         self.local_sync_time_stamp = 0  # 同步帧的帧数计数
-        self.sync_frames_cache = []
-        self.history_frames = []
-        self.is_game_ready = False
-        self.exit_event = threading.Event()
+        self.sync_frames_cache = []     # 从服务器同步的渲染帧缓存数组
+        self.history_frames = []        # 整局游戏的所有运行的历史逻辑帧记录，用于历史记录回放等操作
+
+        self.is_game_ready = False      # 游戏是否开始
+        self.exit_event = threading.Event() # 游戏是否结束的退出事件
         self.lock = threading.RLock()  # 线程锁，保证渲染和物理运算的顺序
         self.thread_render = None  # 渲染线程
         self.thread_fixed_update = None  # 逻辑运算线程
@@ -376,8 +381,8 @@ class FightingAircraftGame:
         self.id_plane_mapping: Dict[int, AirPlane] = {}
         self.team1_group = pygame.sprite.Group()
         self.team2_group = pygame.sprite.Group()
-
-        self.time_stamp_delay = 0
+        # 游戏运行日志
+        self.is_use_logger = False
         self.logger_file_name = 'run_physic.log'
         self.logger = None
 
@@ -395,7 +400,6 @@ class FightingAircraftGame:
         3. 渲染帧
         渲染帧整体处理在指定的逻辑运算情境下渲染的精细程度
         主函数步骤设计：
-        
         '''
         self.logger = setup_logging(self.logger_file_name)
         pg.init()  # 初始化pg
@@ -432,153 +436,6 @@ class FightingAircraftGame:
             # 游戏没开始的话就处理输入内容，防止程序假死
             self.input_manager()  # 输入管理
             self.clock_sync.tick(self.fps_sync)  # 获取时间差，控制帧率
-
-    def fixed_update(self):
-        """
-        运行主游戏逻辑：
-        针对网络发送的运行数据，本地接收时间是不固定的，但是必须要用固定的时间间隔去运行这些不固定间隔的数据
-        :return:
-        """
-        delta_time = np.round(1000 / self.fps_physics, decimals=2)  # 物理运行的速度应该是固定的服务器的间隔，为了保证统一，保留两位小数
-
-        # 此处只有物理运行，关于图形渲染是一个新的单独的线程
-        while not self.exit_event.is_set():
-            if self.is_game_ready:
-                self.lock.acquire()
-                # 首先要刷新渲染的起始时间
-                self.render_frame_idx = 0
-                '''
-                此处的逻辑应该是首先检查服务器那边发过来同步帧的缓存数量是否大于1，如果大于1的话就得尽快运行到缓存还剩1的那个状态，
-                假如同步帧和逻辑帧之间的倍数为3，那么缓存为1表示还有5个逻辑帧的时间接收下一个同步帧
-                处理方式：
-                如果此时缓存帧有1个，那么运行速度按照客户端正常的逻辑渲染速度
-                # --------------------------------
-                self.sync_frames_cache:
-                {"command": CommandType.cmd_frame_update.value,
-                  'sync_time_stamp': 0,
-                  "actions": [
-                        "player_id": action
-                        ...
-                  ]}
-                '''
-                frame_step = self.fps_physics / self.fps_sync
-
-                # 此处处理的是快进环节，可以在数据包堆积的时候快进处理没跟上的同步帧数据
-                for sync_frame in self.sync_frames_cache[:-1]:
-                    # 如果需要同步用户输入，就同步用户输入
-                    sync_2_physic_frame = sync_frame['sync_time_stamp'] * frame_step
-                    # if (self.local_physic_time_stamp % frame_step == 0
-                    #         and self.local_physic_time_stamp == sync_2_physic_frame):
-                    while (sync_frame['sync_time_stamp'] - 1) * frame_step < self.local_physic_time_stamp <= sync_2_physic_frame:
-                        # =================================================================
-                        # 先更新飞机的输入状态
-                        actions = sync_frame['actions']
-                        # print('time delay: {}'.format(time.time() - self.time_stamp_delay))
-                        # 新逻辑：遍历，没有输入的把输入设置为None
-                        for key, value in self.id_plane_mapping.items():
-                            key = str(key)
-                            if key in actions.keys():
-                                value.input_state = InputState(actions[key])
-                            else:
-                                value.input_state = InputState.NoInput
-                        # =================================================================
-                        # 物理运算
-                        # 然后遍历飞机的飞行状态
-                        for plane in self.id_plane_mapping.values():
-                            # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-                            # 注意此处在运行完毕后 会重置 对应的飞机的飞行状态
-                            pos, _ = plane.fixed_update(delta_time=delta_time)
-                            plane.set_position(pos)
-                            self.logger.debug(
-                                json.dumps({'physic_frame': self.local_physic_time_stamp, 'input': plane.input_state,
-                                            'id': plane.air_plane_params.id}))
-                            # 所有发射的弹药也得 move
-                            for bullet in plane.bullet_group:
-                                pos, _ = bullet.move(delta_time=delta_time)
-                                bullet.set_position(pos)
-                                if bullet.time_passed >= bullet.life_time:
-                                    plane.bullet_group.remove(bullet)
-                            # 进行碰撞检测
-                            crashed = {}
-                            if plane.team_number == 1:
-                                crashed = pygame.sprite.groupcollide(
-                                    plane.bullet_group, self.team2_group, False, False)
-                            elif plane.team_number == 2:
-                                crashed = pygame.sprite.groupcollide(
-                                    plane.bullet_group, self.team1_group, False, False)
-                            else:
-                                print('unknown team_number: {}'.format(plane.team_number))
-
-                            if len(crashed):
-                                for bullet in crashed:
-                                    if crashed[bullet][0].take_damage(bullet.damage):
-                                        print('enemy eliminated. ')
-                                    plane.bullet_group.remove(bullet)
-                        self.local_physic_time_stamp += 1
-
-                    # 删除目前已经运行的逻辑帧
-                    self.logger.debug(
-                        json.dumps({'physic_frame': self.local_physic_time_stamp, 'actions': sync_frame['actions']}))
-                    self.sync_frames_cache.remove(sync_frame)
-                    self.local_sync_time_stamp += 1
-
-                # 此处只剩一个同步帧，可以慢慢的运行物理逻辑等待服务器下一个同步帧的到来
-                # print('sync_time_stamp left: {}'.format(len(self.sync_frames_cache)))
-                # print('main plane input: {}'.format(self.player_plane.input_state))
-                if (len(self.sync_frames_cache) == 1 and
-                        self.sync_frames_cache[0]['sync_time_stamp'] * frame_step >= self.local_physic_time_stamp):
-                    # 先更新飞机的输入状态
-                    actions = self.sync_frames_cache[0]['actions']
-                    # print('time delay: {}'.format(time.time() - self.time_stamp_delay))
-                    # 新逻辑：遍历，没有输入的把输入设置为None
-                    for key, value in self.id_plane_mapping.items():
-                        key = str(key)
-                        if key in actions.keys():
-                            value.input_state = InputState(actions[key])
-                        else:
-                            value.input_state = InputState.NoInput
-                    # =================================================================
-                    # 物理运算
-                    # 然后遍历飞机的飞行状态
-                    for plane in self.id_plane_mapping.values():
-                        pos, _ = plane.fixed_update(delta_time=delta_time)
-                        plane.set_position(pos)
-                        self.logger.debug(
-                            json.dumps({'physic_frame': self.local_physic_time_stamp, 'input': plane.input_state,
-                                        'id': plane.air_plane_params.id}))
-                        # 所有发射的弹药也得 move
-                        for bullet in plane.bullet_group:
-                            pos, _ = bullet.move(delta_time=delta_time)
-                            bullet.set_position(pos)
-                            if bullet.time_passed >= bullet.life_time:
-                                plane.bullet_group.remove(bullet)
-                        # 进行碰撞检测
-                        crashed = {}
-                        if plane.team_number == 1:
-                            crashed = pygame.sprite.groupcollide(
-                                plane.bullet_group, self.team2_group, False, False)
-                        elif plane.team_number == 2:
-                            crashed = pygame.sprite.groupcollide(
-                                plane.bullet_group, self.team1_group, False, False)
-                        else:
-                            print('unknown team_number: {}'.format(plane.team_number))
-
-                        if len(crashed):
-                            for bullet in crashed:
-                                if crashed[bullet][0].take_damage(bullet.damage):
-                                    print('enemy eliminated. ')
-                                plane.bullet_group.remove(bullet)
-
-                    self.local_physic_time_stamp += 1
-
-                    print('\rserver sync t_s: {}, local sync t_s: {}, difference: {}'.format(
-                        self.sync_frames_cache[0]['sync_time_stamp'],
-                        self.local_sync_time_stamp,
-                        self.sync_frames_cache[0]['sync_time_stamp'] - self.local_sync_time_stamp), end='')
-                self.lock.release()
-
-            # self.input_manager()  # 输入管理
-            self.clock_fixed_update.tick(self.fps_physics)  # 获取时间差，控制帧率
 
     def callback_recv(self, cmd, params):
 
@@ -629,6 +486,50 @@ class FightingAircraftGame:
                 self.lock.release()
         elif cmd == CallbackCommand.SocketClose:
             print('socket closed. ')
+
+    # def fixed_update_deprecated(self, frame, delta_time):
+    #     """
+    #     用于更新物理计算
+    #     :param delta_time: ms
+    #     :return:
+    #     """
+    #     # 先更新飞机的输入状态
+    #     actions = frame['actions']
+    #     for key in actions.keys():
+    #         plane = self.id_plane_mapping[int(key)]
+    #         plane.input_state = InputState(actions[key])
+    #
+    #     # 然后遍历飞机的飞行状态
+    #     for plane in self.id_plane_mapping.values():
+    #         pos, _ = plane.fixed_update(delta_time=delta_time)
+    #         plane.set_position(pos)
+    #         # 所有发射的弹药也得 move
+    #         for bullet in plane.bullet_group:
+    #             pos, _ = bullet.move(delta_time=delta_time)
+    #             bullet.set_position(pos)
+    #             if bullet.time_passed >= bullet.life_time:
+    #                 plane.bullet_group.remove(bullet)
+    #         # 进行碰撞检测
+    #         crashed = {}
+    #         if plane.team_number == 1:
+    #             crashed = pygame.sprite.groupcollide(
+    #                 plane.bullet_group, self.team2_group, False, False)
+    #         elif plane.team_number == 2:
+    #             crashed = pygame.sprite.groupcollide(
+    #                 plane.bullet_group, self.team1_group, False, False)
+    #         else:
+    #             print('unknown team_number: {}'.format(plane.team_number))
+    #
+    #         if len(crashed):
+    #             for bullet in crashed:
+    #                 if crashed[bullet][0].take_damage(bullet.damage):
+    #                     print('enemy eliminated. ')
+    #                 plane.bullet_group.remove(bullet)
+    #
+    #     # self.local_time_stamp += 1
+    #     print('\rhistory frames: {}, server_time_stamp - local_time_stamp: {}'.format(
+    #         len(self.history_frames), frame['time_stamp'] - self.local_physic_time_stamp
+    #     ), end='')
 
     def input_manager(self):
         # 处理输入
@@ -693,53 +594,133 @@ class FightingAircraftGame:
 
             # 注意同步数据
             self.lock.acquire()
-            self.time_stamp_delay = time.time()
             self.client.send(json.dumps(data), pack_data=True, data_type=DataType.TypeString)
             self.lock.release()
 
-    def fixed_update_deprecated(self, frame, delta_time):
+    def update_plane_input_state(self, actions):
         """
-        用于更新物理计算
-        :param delta_time: ms
-        :return:
+        更新飞机的输入状态
         """
-        # 先更新飞机的输入状态
-        actions = frame['actions']
-        for key in actions.keys():
-            plane = self.id_plane_mapping[int(key)]
-            plane.input_state = InputState(actions[key])
+        for key, value in self.id_plane_mapping.items():
+            key = str(key)
+            if key in actions.keys():
+                value.input_state = InputState(actions[key])
+            else:
+                value.input_state = InputState.NoInput
 
-        # 然后遍历飞机的飞行状态
+    def check_bullet_collision(self, plane):
+        """
+        执行碰撞检测
+        """
+        crashed = {}
+        if plane.team_number == 1:
+            crashed = pygame.sprite.groupcollide(
+                plane.bullet_group, self.team2_group, False, False)
+        elif plane.team_number == 2:
+            crashed = pygame.sprite.groupcollide(
+                plane.bullet_group, self.team1_group, False, False)
+        else:
+            print('unknown team_number: {}'.format(plane.team_number))
+        return crashed
+
+    def update_plane_physics(self, delta_time):
+        """
+        更新飞机的物理状态
+        """
         for plane in self.id_plane_mapping.values():
             pos, _ = plane.fixed_update(delta_time=delta_time)
             plane.set_position(pos)
-            # 所有发射的弹药也得 move
+            if self.is_use_logger:
+                self.logger.debug(
+                    json.dumps({'physic_frame': self.local_physic_time_stamp, 'input': plane.input_state,
+                                'id': plane.air_plane_params.id}))
             for bullet in plane.bullet_group:
                 pos, _ = bullet.move(delta_time=delta_time)
                 bullet.set_position(pos)
                 if bullet.time_passed >= bullet.life_time:
                     plane.bullet_group.remove(bullet)
-            # 进行碰撞检测
-            crashed = {}
-            if plane.team_number == 1:
-                crashed = pygame.sprite.groupcollide(
-                    plane.bullet_group, self.team2_group, False, False)
-            elif plane.team_number == 2:
-                crashed = pygame.sprite.groupcollide(
-                    plane.bullet_group, self.team1_group, False, False)
-            else:
-                print('unknown team_number: {}'.format(plane.team_number))
-
-            if len(crashed):
+            # 碰撞检测
+            crashed = self.check_bullet_collision(plane)
+            if crashed:
                 for bullet in crashed:
-                    if crashed[bullet][0].take_damage(bullet.damage):
-                        print('enemy eliminated. ')
-                    plane.bullet_group.remove(bullet)
+                    # --------------------------------
+                    # 首先利用精确检测看两者是否真正相交
+                    if pygame.sprite.collide_mask(bullet, crashed[bullet][0]) is not None:
+                        # 然后尝试给飞机对应的伤害
+                        if crashed[bullet][0].take_damage(bullet.damage):
+                            print('enemy eliminated. ')
+                        # print('attack it!')
+                        plane.bullet_group.remove(bullet)
+                    # else:
+                    #     print('not really crashed!')
+    def fixed_update(self):
+        """
+        运行主游戏逻辑：
+        针对网络发送的运行数据，本地接收时间是不固定的，但是必须要用固定的时间间隔去运行这些不固定间隔的数据
+        :return:
+        """
+        delta_time = np.round(1000 / self.fps_physics, decimals=2)  # 物理运行的速度应该是固定的服务器的间隔，为了保证统一，保留两位小数
 
-        # self.local_time_stamp += 1
-        print('\rhistory frames: {}, server_time_stamp - local_time_stamp: {}'.format(
-            len(self.history_frames), frame['time_stamp'] - self.local_physic_time_stamp
-        ), end='')
+        # 此处只有物理运行，关于图形渲染是一个新的单独的线程
+        while not self.exit_event.is_set():
+            if self.is_game_ready:
+                self.lock.acquire()
+                # 首先要刷新渲染的起始时间
+                self.render_frame_idx = 0
+                '''
+                此处的逻辑应该是首先检查服务器那边发过来同步帧的缓存数量是否大于1，如果大于1的话就得尽快运行到缓存还剩1的那个状态，
+                假如同步帧和逻辑帧之间的倍数为3，那么缓存为1表示还有5个逻辑帧的时间接收下一个同步帧
+                处理方式：
+                如果此时缓存帧有1个，那么运行速度按照客户端正常的逻辑渲染速度
+                # --------------------------------
+                self.sync_frames_cache:
+                {"command": CommandType.cmd_frame_update.value,
+                  'sync_time_stamp': 0,
+                  "actions": [
+                        "player_id": action
+                        ...
+                  ]}
+                '''
+                frame_step = self.fps_physics / self.fps_sync
+
+                # 此处处理的是快进环节，可以在数据包堆积的时候快进处理没跟上的同步帧数据
+                for sync_frame in self.sync_frames_cache[:-1]:
+                    # 如果需要同步用户输入，就同步用户输入
+                    sync_2_physic_frame = sync_frame['sync_time_stamp'] * frame_step
+                    # if (self.local_physic_time_stamp % frame_step == 0
+                    #         and self.local_physic_time_stamp == sync_2_physic_frame):
+                    while (sync_frame['sync_time_stamp'] - 1) * frame_step < self.local_physic_time_stamp <= sync_2_physic_frame:
+                        # 先更新飞机的输入状态
+                        self.update_plane_input_state(sync_frame['actions'])
+                        # 物理运算
+                        self.update_plane_physics(delta_time=delta_time)
+                        self.local_physic_time_stamp += 1
+
+                    # 删除目前已经运行的逻辑帧
+                    if self.is_use_logger:
+                        self.logger.debug(
+                            json.dumps({'physic_frame': self.local_physic_time_stamp, 'actions': sync_frame['actions']}))
+                    self.sync_frames_cache.remove(sync_frame)
+                    self.local_sync_time_stamp += 1
+
+                # 此处只剩一个同步帧，可以慢慢的运行物理逻辑等待服务器下一个同步帧的到来
+                if (len(self.sync_frames_cache) == 1 and
+                        self.sync_frames_cache[0]['sync_time_stamp'] * frame_step >= self.local_physic_time_stamp):
+                    # 先更新飞机的输入状态
+                    self.update_plane_input_state(self.sync_frames_cache[0]['actions'])
+                    # 物理运算
+                    self.update_plane_physics(delta_time=delta_time)
+                    self.local_physic_time_stamp += 1
+
+                    # print('\rserver sync t_s: {}, local sync t_s: {}, difference: {}'.format(
+                    #     self.sync_frames_cache[0]['sync_time_stamp'],
+                    #     self.local_sync_time_stamp,
+                    #     self.sync_frames_cache[0]['sync_time_stamp'] - self.local_sync_time_stamp), end='')
+                self.lock.release()
+
+            # self.input_manager()  # 输入管理
+            self.clock_fixed_update.tick(self.fps_physics)  # 获取时间差，控制帧率
+
 
     def render(self):
         print('render thread started. ')

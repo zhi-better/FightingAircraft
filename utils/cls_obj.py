@@ -47,6 +47,7 @@ class StaticObject(pygame.sprite.Sprite):
     def __init__(self):
         # 调用父类的初始化方法
         super().__init__()
+        self.mask = None
         self._position = np.zeros((2,))
         self.rect = pygame.Rect(0, 0, 0, 0)
         self.image = None
@@ -73,6 +74,7 @@ class StaticObject(pygame.sprite.Sprite):
         self.rect.width = rect.width
         self.rect.height = rect.height
         self.image = sprite
+        self.mask = pygame.mask.from_surface(self.image)  # 创建记录透明点和不透明点的mask
 
     def get_sprite(self):
         return self.image

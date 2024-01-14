@@ -162,6 +162,7 @@ class AirPlane(DynamicObject):
         rect = self.image.get_rect()
         self.rect.width = rect.width
         self.rect.height = rect.height
+        self.mask = pygame.mask.from_surface(self.image)
         return self.image
 
     def speed_up(self):
@@ -441,11 +442,24 @@ class AirPlane(DynamicObject):
         # direction = np.array([-direction[1], direction[0]])
         new_bullet = Bullet()
         new_bullet.set_map_size(self.get_map_size())
-        new_bullet.set_sprite(bullet_sprite)
+        new_bullet.set_sprite(pygame.transform.rotate(bullet_sprite, self.get_angle(self.direction_vector)))
         local_position[1] = np.cos(np.radians(self.roll_attitude * 10)) * local_position[1]
         new_bullet.set_position(local_to_world(
             self.get_position(), direction, local_point=local_position))
         new_bullet.set_speed(self.velocity + 5)
+        new_bullet.set_direction_vector(direction)
+        new_bullet.damage = 10
+        self.bullet_group.add(new_bullet)
+
+    def create_bomb(self, bomb_sprite, local_position, direction):
+        # direction = np.array([-direction[1], direction[0]])
+        new_bullet = Bullet()
+        new_bullet.set_map_size(self.get_map_size())
+        new_bullet.set_sprite(pygame.transform.rotate(bomb_sprite, self.get_angle(self.direction_vector)))
+        local_position[1] = np.cos(np.radians(self.roll_attitude * 10)) * local_position[1]
+        new_bullet.set_position(local_to_world(
+            self.get_position(), direction, local_point=local_position))
+        new_bullet.set_speed(self.velocity + 2)
         new_bullet.set_direction_vector(direction)
         new_bullet.damage = 10
         self.bullet_group.add(new_bullet)
