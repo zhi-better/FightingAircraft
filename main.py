@@ -68,7 +68,8 @@ class CommandType(Enum):
     cmd_login_resp = 2
     cmd_matching_successful = 3
     cmd_player_action = 4
-    cmd_frame_update = 4
+    cmd_frame_update = 5
+    cmd_matching_state_change = 6
 
 
 class GameSprite(pygame.sprite.Sprite):
@@ -329,6 +330,10 @@ class GameResources:
 class FightingAircraftGame:
     def __init__(self):
         # 游戏必要的参数配置
+        self.queue_current_players = 0
+        self.room_max_player_number = 0
+        self.server_port = 4444
+        self.server_address = '127.0.0.1'
         self.player_id = 0
         self.game_name = "FightingAircraft"
         self.game_window_size = 1080, 720  # 设置窗口大小
@@ -401,7 +406,9 @@ class FightingAircraftGame:
         渲染帧整体处理在指定的逻辑运算情境下渲染的精细程度
         主函数步骤设计：
         '''
-        self.logger = setup_logging(self.logger_file_name)
+        if self.is_use_logger:
+            self.logger = setup_logging(self.logger_file_name)
+
         pg.init()  # 初始化pg
         self.screen = pg.display.set_mode(self.game_window_size)  # 显示窗口
         pg.display.set_caption(self.game_name)
@@ -415,7 +422,12 @@ class FightingAircraftGame:
 
         # 连接网络并发送匹配请求
         self.client.set_callback_fun(self.callback_recv)
-        self.client.connect_to_server('172.21.174.158', 4444)
+
+        config_data = json.load(open('config.json', 'r'))
+        # 设置连接信息
+        self.server_address = config_data.get('server_address', '172.21.174.158')
+        self.server_port = config_data.get('server_port', 4444)
+        self.client.connect_to_server(self.server_address, self.server_port)
         data = {
             "command": CommandType.cmd_login.value,
             "player_id": self.player_id,
@@ -445,6 +457,7 @@ class FightingAircraftGame:
             cmd = CommandType(data['command'])
             if cmd == CommandType.cmd_login_resp:
                 self.player_id = data['player_id']
+                # self.room_max_player_number = data['room_max_player_number']
             elif cmd == CommandType.cmd_matching_successful:
                 print('matching successfully. ')
                 self.lock.acquire()
@@ -484,6 +497,9 @@ class FightingAircraftGame:
                 self.sync_frames_cache.append(data)
                 self.history_frames.append(data)
                 self.lock.release()
+            elif cmd == CommandType.cmd_matching_state_change:
+                self.room_max_player_number = data['room_max_player_number']
+                self.queue_current_players = data['queue_current_players']
         elif cmd == CallbackCommand.SocketClose:
             print('socket closed. ')
 
@@ -792,6 +808,13 @@ class FightingAircraftGame:
             else:
                 # 清屏
                 self.screen.fill((255, 255, 255))
+                # 此处需要显示提示信息，等待另外的玩家进入游戏
+                text = font.render(
+                    f"Waiting for {self.room_max_player_number} players. Currently in queue: {self.queue_current_players}...",
+                    True, (0, 0, 0))
+                text_rect = text.get_rect(center=(self.game_window_size[0] // 2, self.game_window_size[1] // 2))
+                self.screen.blit(text, text_rect.topleft)
+
             pg.display.flip()  # 更新全部显示
             self.lock.release()
             self.clock_render.tick(self.fps_render)

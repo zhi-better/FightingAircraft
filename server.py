@@ -1,3 +1,4 @@
+import argparse
 import json
 import queue
 import random
@@ -53,7 +54,7 @@ class IDAllocator:
 
 class FightingAircraftGameServer:
     def __init__(self):
-        self.room_max_player_number = 2
+        self.room_max_player_number = 1
         self.room_info_map = {}                 # 房间和玩家 id 的 map
         self.matching_queue = queue.Queue()     # 所有目前正在匹配队列等待的玩家 id
         self.player_id_2_player_info = {}       # 从 id 到玩家其他信息的 map
@@ -69,7 +70,8 @@ class FightingAircraftGameServer:
         #                           'time_stamp': self.time_stamp,
         #                           "actions": []}
         self.lock = threading.Lock()
-        self.server_start()
+
+        # self.server_start()
 
     def server_callback(self, cmd, param):
         """
@@ -91,6 +93,7 @@ class FightingAircraftGameServer:
 
                 # 保存玩家和对应的发送端口
                 data_resp['player_id'] = new_player_id
+                # data_resp['room_max_player_number'] = self.room_max_player_number
                 self.tcp_client_2_player_id[tcp_client] = new_player_id
                 self.player_id_2_player_info[new_player_id] = \
                     {'tcp_client': tcp_client, 'plane_name': data['plane_name']}
@@ -132,6 +135,19 @@ class FightingAircraftGameServer:
                             data=json.dumps(start_data),
                             pack_data=True,
                             data_type=DataType.TypeString)
+                else:
+                    # 此处需要通知其他在匹配队列的玩家目前人数更新
+                    start_data = {"command": CommandType.cmd_matching_state_change.value,
+                                  'room_max_player_number': self.room_max_player_number,
+                                  "queue_current_players": self.matching_queue.qsize()}
+                    # 给每一个等待的玩家实时通知此时的匹配消息
+                    for player_id in self.matching_queue.queue:
+                        self.server.send(
+                            self.player_id_2_player_info[player_id]['tcp_client'],
+                            data=json.dumps(start_data),
+                            pack_data=True,
+                            data_type=DataType.TypeString)
+
 
             elif cmd == CommandType.cmd_player_action:
                 player_id = data['player_id']
@@ -146,6 +162,17 @@ class FightingAircraftGameServer:
             # 首先需要判断它是否仍在匹配队列
             if player_id in self.matching_queue.queue:
                 self.matching_queue.queue.remove(player_id)
+                # 此处需要通知其他在匹配队列的玩家目前人数更新
+                start_data = {"command": CommandType.cmd_matching_state_change.value,
+                              'room_max_player_number': self.room_max_player_number,
+                              "queue_current_players": self.matching_queue.qsize()}
+                # 给每一个等待的玩家实时通知此时的匹配消息
+                for player_id in self.matching_queue.queue:
+                    self.server.send(
+                        self.player_id_2_player_info[player_id]['tcp_client'],
+                        data=json.dumps(start_data),
+                        pack_data=True,
+                        data_type=DataType.TypeString)
             else:
                 room_number = self.player_id_2_player_info[player_id]['room_number']
                 # 首先判断他在哪个房间，如果房间没人了，直接把房间删了，否则就发送通知，某玩家离线
@@ -194,5 +221,19 @@ class FightingAircraftGameServer:
 
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='Fighting Aircraft Game Server')
+    parser.add_argument('--room-max-player-number', default=1,
+                        help='set the server room max player number')
+
+    args = parser.parse_args()
+
+    # if args.start_server:
+    #     start_server()
+    # elif args.other_command:
+    #     process_other_command()
+    # else:
+    #     print('Invalid command. Use --start-server or --other-command.')
     server = FightingAircraftGameServer()
+    server.room_max_player_number = int(args.room_max_player_number)
+    server.server_start()
 

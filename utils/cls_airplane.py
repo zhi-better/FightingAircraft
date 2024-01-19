@@ -373,7 +373,7 @@ class AirPlane(DynamicObject):
         # self._engine_temperature = np.minimum(
         #     100, np.maximum(0, self._engine_temperature + self.air_plane_params.engine_heat_rate * delta_time * 0))
         self._engine_temperature = np.minimum(
-            100, np.maximum(0, self._engine_temperature + self.air_plane_params.engine_heat_rate * delta_time * 0.02))
+            100, np.maximum(0, self._engine_temperature + self.air_plane_params.engine_heat_rate * delta_time * 0.01))
         self.heat_counter += 1
         self.air_plane_params.engine_heat_rate = 0
 
