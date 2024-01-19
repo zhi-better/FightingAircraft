@@ -49,9 +49,25 @@ class GameRender:
             tile_rect = pg.Rect(0, 0, 0, 0)
         return tile_rect
 
+    def render_turret(self, turret, delta_time):
+        """
+        :param turret:
+        :return:
+        """
+        sprite = turret.get_sprite()
+        pos, dir_v = turret.move(delta_time=delta_time)
+        plane_rect, should_render = (
+            self.get_object_render_rect(sprite, pos))
+        if should_render:
+            self.screen.blit(sprite, plane_rect)
+
+        if self.draw_collision_box:
+            # 创建一个充气的矩形，以便在原始矩形周围绘制边框
+            inflated_rect = plane_rect.inflate(2, 2)  # 边框大小为4像素
+            pygame.draw.rect(self.screen, (255, 0, 0), inflated_rect, 2)  # 绘制红色边框
+
     def render_bullet(self, bullet, delta_time):
         """
-
         :param bullet:
         :return:
         """
@@ -69,7 +85,7 @@ class GameRender:
 
     def render_plane(self, plane, team_id, delta_time):
         """
-
+        渲染飞机，实现不同角度射击
         :param plane:
         :param team_id:
         :return:
@@ -88,7 +104,7 @@ class GameRender:
                 self.font = pygame.font.Font(None, 24)  # 使用默认字体，大小36
             # 在飞机上方显示生命值文本
             text_surface = self.font.render(
-                f'Health: {plane.air_plane_params.health_points}, pos_x: {np.round(pos[0], decimals=2)}, pos_y: {np.round(pos[1], decimals=2)}',
+                f'Health: {plane._air_plane_params.health_points}, pos_x: {np.round(pos[0], decimals=2)}, pos_y: {np.round(pos[1], decimals=2)}',
                 True, font_color)  # 黑色文本
             text_rect = text_surface.get_rect(
                 center=(plane_rect.centerx, plane_rect.centery - 0.6 * plane_rect.height))  # 设置文本位置
@@ -148,8 +164,8 @@ class GameRender:
         position[0] = position[0] % (self.width * self.tile_width)
         position[1] = position[1] % (self.height * self.tile_height)
         self.view_position = np.array([position[0], position[1]]).astype(int)
-        x_diff = position[0] % self.tile_width
-        y_diff = position[1] % self.tile_height
+        x_diff = int(position[0] % self.tile_width)
+        y_diff = int(position[1] % self.tile_height)
         # 开始加载图像并绘图
         x_tile_block = int(position[0] / self.tile_width)
         y_tile_block = int(position[1] / self.tile_height)

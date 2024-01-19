@@ -243,6 +243,8 @@ class TcpSererTools(TcpBaseTools):
                     Warning('the tcp_client is not available, skipping client process! ')
                     break
             except Exception as e:
+                if self.callback_fun:
+                    self.callback_fun(CallbackCommand.SocketClose, tcp_socket)
                 print(e)
                 return
             # ----------------------------------------------------------------
@@ -346,6 +348,8 @@ class TcpSererTools(TcpBaseTools):
                 tcp_socket.send(data)
         except Exception as e:
             self.close_socket(tcp_socket)
+            if self.callback_fun:
+                self.callback_fun(CallbackCommand.SocketClose, tcp_socket)
             print(e)
         # print('start send data! ')
         self.lock.release()
@@ -392,6 +396,8 @@ class TcpClientTools(TcpBaseTools):
                     Warning('the tcp_client is not available, skipping client process! ')
                     break
             except Exception as e:
+                if self.callback_fun:
+                    self.callback_fun(CallbackCommand.SocketClose, tcp_socket)
                 print(e)
                 return
             # ----------------------------------------------------------------
@@ -451,6 +457,8 @@ class TcpClientTools(TcpBaseTools):
                 self.tcp_socket.send(data)
         except OSError as e:
             self.close_socket()
+            if self.callback_fun:
+                self.callback_fun(CallbackCommand.SocketClose, tcp_socket)
             print(e)
 
 

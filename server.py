@@ -4,7 +4,6 @@ import queue
 import random
 import threading
 import time
-
 import pygame
 
 from main import CommandType
@@ -119,10 +118,10 @@ class FightingAircraftGameServer:
                             self.player_id_2_player_info[player_id]['tcp_client'])
                         start_data["planes"].append(
                             {"player_id": player_id,
-                             "position_x": random.random() * 5000,
-                             "position_y": random.random() * 5000,
-                             # "position_x": 5000,
-                             # "position_y": 5000,
+                             # "position_x": random.random() * 5000,
+                             # "position_y": random.random() * 5000,
+                             "position_x": 2000,
+                             "position_y": 2000,
                              'plane_name': info['plane_name']})
 
                     self.room_info_map[room_number] = {'tcp_list': room_player_tcp_list,

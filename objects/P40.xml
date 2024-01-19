@@ -38,7 +38,6 @@
     <SubTexture name="P40/pitch/pitch0033" x="240" y="350" width="88" height="112" frameX="-81" frameY="-72" frameWidth="256" frameHeight="256"/>
     <SubTexture name="P40/pitch/pitch0034" x="272" y="118" width="96" height="112" frameX="-79" frameY="-72" frameWidth="256" frameHeight="256"/>
     <SubTexture name="P40/pitch/pitch0035" x="296" y="838" width="98" height="114" frameX="-78" frameY="-71" frameWidth="256" frameHeight="256"/>
-    <SubTexture name="P40/roll/roll" x="168" y="120" width="102" height="114" frameX="-77" frameY="-71" frameWidth="256" frameHeight="256"/>
     <SubTexture name="P40/roll/roll0000" x="134" y="242" width="102" height="114" frameX="-77" frameY="-71" frameWidth="256" frameHeight="256"/>
     <SubTexture name="P40/roll/roll0001" x="238" y="236" width="102" height="112" frameX="-77" frameY="-74" frameWidth="256" frameHeight="256"/>
     <SubTexture name="P40/roll/roll0002" x="416" y="344" width="102" height="108" frameX="-77" frameY="-77" frameWidth="256" frameHeight="256"/>

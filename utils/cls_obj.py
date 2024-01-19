@@ -3,10 +3,25 @@ import numpy as np
 import pygame
 
 
+def vector_2_angle(direction_vector, is_deg=True):
+    """
+    获取飞机当前在屏幕上渲染的2d角度
+    :return:
+    """
+    angle_rad = np.arctan2(direction_vector[1], direction_vector[0])
+    if is_deg:
+        # 将弧度转换为角度
+        angle_deg = np.degrees(angle_rad)
+        return float(angle_deg)
+    else:
+        return float(angle_rad)
+
+
+
 def local_to_world(local_position, direction_vector, local_point):
     # 构造旋转矩阵
-    rotation_matrix_local_to_world = np.array([[direction_vector[0], direction_vector[1]],
-                                               [-direction_vector[1], direction_vector[0]]])
+    rotation_matrix_local_to_world = np.array([[direction_vector[0, 0], direction_vector[1, 0]],
+                                               [-direction_vector[1, 0], direction_vector[0, 0]]])
 
     # 将局部坐标转换为世界坐标
     world_point = local_position + np.dot(rotation_matrix_local_to_world, local_point)
@@ -61,14 +76,6 @@ class StaticObject(pygame.sprite.Sprite):
     def get_map_size(self):
         return self._map_size
 
-    def update(self, *args, **kwargs):
-        """
-        更新
-        :param args:
-        :param kwargs:
-        :return:
-        """
-
     def set_sprite(self, sprite):
         rect = sprite.get_rect()
         self.rect.width = rect.width
@@ -105,20 +112,33 @@ class StaticObject(pygame.sprite.Sprite):
         return self.rect
 
     def get_position(self):
-        return self._position
+        return self._position.reshape((2, 1))
+
+    @abstractmethod
+    def fixed_update(self, delta_time):
+        """
+        每一个子类都需要重写物理运算的函数内容，并在里面完成自己的物理运算
+        :param delta_time:
+        :return:
+        """
+        pass
 
 
 class DynamicObject(StaticObject):
     def __init__(self):
         super().__init__()
-        self.direction_vector = np.array([0, 1])
+        self.direction_vector = np.array([1, 0]).reshape((2, 1))
         self.speed = 0.0
         self.velocity = 0
+        self.angular_speed = 0
         self.angular_velocity = 0
 
     def set_speed(self, speed):
         self.speed = speed
         self.velocity = speed
+
+    def fixed_update(self, delta_time):
+        self.move(delta_time=delta_time)
 
     def move(self, delta_time):
         """
@@ -139,24 +159,13 @@ class DynamicObject(StaticObject):
         # ---------------------------------------------
         # move
         _2d_velocity = (int(self.velocity * delta_time * 0.1) *
-                        np.multiply(direction_vector, np.array([1, -1])))
+                        np.multiply(direction_vector.reshape((2, 1)), np.array([1, -1]).reshape((2, 1))))
 
         return self.get_position() + _2d_velocity, direction_vector
 
     def set_direction_vector(self, vector_2d):
         vector_2d = vector_2d / np.linalg.norm(vector_2d)
         self.direction_vector = vector_2d
-
-    def get_angle(self, direction_vector):
-        """
-        获取飞机当前在屏幕上渲染的2d角度
-        :return:
-        """
-        angle_rad = np.arctan2(direction_vector[1], direction_vector[0])
-        # 将弧度转换为角度
-        angle_deg = np.degrees(angle_rad)
-        # print(angle_deg)
-        return float(angle_deg)
 
 
 
