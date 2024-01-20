@@ -14,30 +14,32 @@ def detect_target_obj(self_position, obj_positions):
     """
 
 
-def calculate_lead_target_rotate_direction(target_vector, target_move_vector,
-                                           target_move_velocity, bullet_move_velocity):
+def calculate_lead_target_position(target_relative_position, target_move_direction,
+                                   target_move_velocity, bullet_move_velocity):
     """
     计算对应目标防空炮塔应该攻击的方向
-    :param target_vector:
+    :param target_relative_position:
     :param target_move_vector:
     :param target_move_velocity:
     :param bullet_move_velocity:
     :return:
     """
     # 先归一化
-    target_move_vector = target_move_vector / np.linalg.norm(target_move_vector)
-    target_vector = target_vector / np.linalg.norm(target_vector)
-
-    # 利用正弦定理直接求解对应的
-    lead_target_angle_sin = target_move_velocity / bullet_move_velocity * np.linalg.norm(
-        np.cross(target_vector.reshape((1,2)), target_move_vector.reshape((1,2))))
-    rad_lead_target = np.arcsin(lead_target_angle_sin)
-    # 此处根据四个象限应该是有四种情况用于计算
-    rad_target = vector_2_angle(target_vector, is_deg=False)
-    # if rad_target
-    rotate_target = rad_lead_target + rad_target
-
-    return np.array([np.cos(rotate_target), -np.sin(rotate_target)]).reshape((2, 1))
+    target_move_direction = target_move_direction / np.linalg.norm(target_move_direction)
+    distance = np.linalg.norm(target_relative_position)
+    target_vector_normalize = target_relative_position / distance
+    A = 1 - (bullet_move_velocity / target_move_velocity) ** 2
+    B = -2 * distance * np.dot(target_move_direction.T, -target_vector_normalize)[0, 0]
+    C = distance ** 2
+    delta = B ** 2 - 4 * A * C
+    if delta >= 0:
+        x1 = (-B + np.sqrt(delta)) / (2 * A)
+        x2 = (-B - np.sqrt(delta)) / (2 * A)
+        f = np.minimum(x1, x2)
+        lead_target_position = target_relative_position + target_move_direction * f
+        return True, np.multiply(lead_target_position, np.array([1, -1]).reshape((2, 1)))
+    else:
+        return False, None
 
 
 class Building(StaticObject):
@@ -62,6 +64,7 @@ class Turret(DynamicObject):
     """
     炮台的基类，主要用于控制发射子弹等操作
     """
+
     def __init__(self):
         super().__init__()
         self.bullet_sprite = None
@@ -87,14 +90,13 @@ class Turret(DynamicObject):
         """
         # 注意此处要在基础的上面进行改动，是一种相对变化
         new_image = pygame.transform.rotate(
-            self.image, vector_2_angle(self.direction_vector))
+            self.image, vector_2_angle(self.get_direction_vector()))
         rect = new_image.get_rect()
         self.rect.width = rect.width
         self.rect.height = rect.height
         self.mask = pygame.mask.from_surface(self.image)
 
         return new_image
-
 
     def fire(self, local_position):
         """
@@ -104,11 +106,11 @@ class Turret(DynamicObject):
         # direction = np.array([-direction[1], direction[0]])
         new_bullet = Bullet()
         new_bullet.set_map_size(self.get_map_size())
-        new_bullet.set_sprite(pygame.transform.rotate(self.bullet_sprite, vector_2_angle(self.direction_vector)))
+        new_bullet.set_sprite(pygame.transform.rotate(self.bullet_sprite, vector_2_angle(self._direction_vector)))
         new_bullet.set_position(local_to_world(
-            self.get_position(), self.direction_vector, local_point=local_position))
+            self.get_position(), self._direction_vector, local_point=local_position))
         new_bullet.set_speed(self.velocity + self.bullet_velocity)
-        new_bullet.set_direction_vector(self.direction_vector)
+        new_bullet.set_direction_vector(self._direction_vector)
         new_bullet.set_damage(self._bullet_damage)
         new_bullet.set_parent(parent=self)
         self.bullet_group.add(new_bullet)
@@ -144,24 +146,22 @@ class Flak(Turret):
         if self.target_obj:
             pos_target = self.target_obj.get_position()
             velocity = self.target_obj.velocity
-            target_direction_vector = self.target_obj.direction_vector
+            target_direction_vector = self.target_obj.get_direction_vector()
             target_vector = pos_target - self.get_position()
             # 旋转炮台瞄准
-            turret_rotate_target_vector = calculate_lead_target_rotate_direction(
-                target_vector=target_vector, target_move_vector=target_direction_vector,
+            ret, lead_target_position = calculate_lead_target_position(
+                target_relative_position=target_vector, target_move_direction=target_direction_vector,
                 target_move_velocity=velocity, bullet_move_velocity=self.bullet_velocity
             )
 
-            # 调用父类的旋转的代码，首先判断防空炮应该旋转的位置
-            # cross_result = -float(np.dot(self.direction_vector.T, turret_rotate_target_vector))
-            # self.angular_velocity = -float(self.angular_speed * np.sign(cross_result))
-            self.direction_vector = turret_rotate_target_vector
+            if ret:
+                self.set_direction_vector(lead_target_position)
 
             pos, direction_vector = self.move(delta_time=delta_time)
             self.set_position(pos)
-            self.direction_vector = direction_vector
+            self.set_direction_vector(direction_vector)
             # 如果实际炮塔角度和理想角度比较接近的话就可以开火了
-            vector_angle_cos = float(np.dot(self.direction_vector.T, turret_rotate_target_vector))
+            vector_angle_cos = float(np.dot(self.get_direction_vector().T, lead_target_position))
             if vector_angle_cos > 0.9:
                 if self.weapon_cool_down_timer > self.round_interval:
                     self.weapon_cool_down_timer = 0

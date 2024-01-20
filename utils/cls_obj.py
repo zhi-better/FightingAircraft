@@ -130,7 +130,7 @@ class StaticObject(pygame.sprite.Sprite):
 class DynamicObject(StaticObject):
     def __init__(self):
         super().__init__()
-        self.direction_vector = np.array([1, 0]).reshape((2, 1))
+        self._direction_vector = np.array([1, 0]).reshape((2, 1))
         self.speed = 0.0
         self.velocity = 0
         self.angular_speed = 0
@@ -152,7 +152,7 @@ class DynamicObject(StaticObject):
         """
         # ---------------------------------------------
         # turn
-        direction_vector = self.direction_vector
+        direction_vector = self._direction_vector
         # print("\rdirection vector: {}".format(direction_vector[0], direction_vector[1]), end='')
         ang_velocity_tmp = self.angular_velocity * delta_time * 0.08
         rotation_matrix = np.array(
@@ -168,9 +168,12 @@ class DynamicObject(StaticObject):
 
         return self.get_position() + _2d_velocity, direction_vector
 
+    def get_direction_vector(self):
+        return self._direction_vector
+
     def set_direction_vector(self, vector_2d):
         vector_2d = vector_2d / np.linalg.norm(vector_2d)
-        self.direction_vector = vector_2d
+        self._direction_vector = vector_2d
 
 
 

@@ -141,7 +141,7 @@ class AirPlane(DynamicObject):
                 self._pitch_modulation_factor = 0
                 self.pitch_attitude = 0
                 self.roll_attitude = 18
-                self.direction_vector = self.direction_vector * -1
+                self.set_direction_vector(self.get_direction_vector() * -1)
             elif 18 < self.pitch_attitude < 35:
                 self._pitch_modulation_factor = 1
             else:
@@ -169,7 +169,8 @@ class AirPlane(DynamicObject):
             rect_dic = self.air_plane_sprites.roll_mapping[int(0)]
 
         self.image = get_rect_sprite(self.image_template, rect_dic)
-        self.image = pygame.transform.rotate(self.image, vector_2_angle(self.direction_vector))
+        self.image = pygame.transform.rotate(
+            self.image, vector_2_angle(self.get_direction_vector()))
         rect = self.image.get_rect()
         self.rect.width = rect.width
         self.rect.height = rect.height
@@ -188,29 +189,6 @@ class AirPlane(DynamicObject):
         self.max_speed = self.speed * 1.5
         self.min_speed = self.speed * 0.7
 
-    # @overrides
-    # def move(self, delta_time):
-    #     """
-    #     move函数并不会修改任何游戏数据，只是会根据从上一个逻辑帧出发经过的时间
-    #     计算得到目前实例应该在的位置
-    #     :param delta_time:
-    #     :return:
-    #     """
-    #     # ---------------------------------------------
-    #     # turn
-    #     direction_vector = self.direction_vector
-    #     ang_velocity_tmp = self.angular_velocity * delta_time * 0.06
-    #     rotation_matrix = np.array(
-    #         [[np.cos(np.radians(ang_velocity_tmp)), -np.sin(np.radians(ang_velocity_tmp))],
-    #          [np.sin(np.radians(ang_velocity_tmp)), np.cos(np.radians(ang_velocity_tmp))]])
-    #     direction_vector = np.dot(rotation_matrix, direction_vector)
-    #     # ---------------------------------------------
-    #     # move
-    #     _2d_velocity = int(
-    #         self.velocity * delta_time * 0.14 * np.cos(np.radians(self.pitch_attitude * 10))) * np.multiply(
-    #         direction_vector.reshape((2, 1)), np.array([1, -1]).reshape((2, 1)))
-    #
-    #     return self.get_position() + _2d_velocity, direction_vector
 
     def fixed_update(self, delta_time):
         """
@@ -396,13 +374,13 @@ class AirPlane(DynamicObject):
         # --------------------------------------------------------------------
         # 重置飞行状态
         self.input_state = InputState.NoInput
-        # 需要来一波偷梁换柱
+        # 需要来一个偷梁换柱
         real_velocity = self.velocity
         self.velocity *= np.cos(np.radians(self.pitch_attitude * 10))
         pos, direction_vector = self.move(delta_time=delta_time)
         self.velocity = real_velocity
         # 物理更新直接改变数值内容
-        self.direction_vector = direction_vector
+        self.set_direction_vector(direction_vector)
         self.set_position(pos)
 
     def take_damage(self, damage):
@@ -421,7 +399,8 @@ class AirPlane(DynamicObject):
         # direction = np.array([-direction[1], direction[0]])
         new_bullet = Bullet()
         new_bullet.set_map_size(self.get_map_size())
-        new_bullet.set_sprite(pygame.transform.rotate(bullet_sprite, vector_2_angle(self.direction_vector)))
+        new_bullet.set_sprite(pygame.transform.rotate(
+            bullet_sprite, vector_2_angle(self.get_direction_vector())))
         local_position[1] = np.cos(np.radians(self.roll_attitude * 10)) * local_position[1]
         new_bullet.set_position(local_to_world(
             self.get_position(), direction, local_point=local_position))
@@ -435,7 +414,8 @@ class AirPlane(DynamicObject):
         # direction = np.array([-direction[1], direction[0]])
         new_bullet = Bullet()
         new_bullet.set_map_size(self.get_map_size())
-        new_bullet.set_sprite(pygame.transform.rotate(bomb_sprite, vector_2_angle(self.direction_vector)))
+        new_bullet.set_sprite(pygame.transform.rotate(
+            bomb_sprite, vector_2_angle(self.get_direction_vector())))
         local_position[1] = np.cos(np.radians(self.roll_attitude * 10)) * local_position[1]
         new_bullet.set_position(local_to_world(
             self.get_position(), direction, local_point=local_position))
@@ -471,13 +451,15 @@ class FighterJet(AirPlane):
 
         for pos in position_list:
             self.create_bullet(
-                self.air_plane_sprites.primary_bullet_sprite, np.array(pos), self.direction_vector)
+                self.air_plane_sprites.primary_bullet_sprite, np.array(pos),
+                self.get_direction_vector())
 
     def secondary_weapon_attack(self):
         position_list = [[self._air_plane_params.plane_height * 0.4, 0]]
 
         for pos in position_list:
-            self.create_bullet(self.air_plane_sprites.secondary_bullet_sprite, np.array(pos), self.direction_vector)
+            self.create_bullet(self.air_plane_sprites.secondary_bullet_sprite, np.array(pos),
+                               self.get_direction_vector())
 
 
 class AttackAircraft(AirPlane):
@@ -510,11 +492,13 @@ class Bomber(AirPlane):
 
         for pos in position_list:
             self.create_bullet(
-                self.air_plane_sprites.primary_bullet_sprite, np.array(pos), self.direction_vector)
+                self.air_plane_sprites.primary_bullet_sprite, np.array(pos),
+                self.get_direction_vector())
 
     def secondary_weapon_attack(self):
         position_list = [[self._air_plane_params.plane_height * 0.4, 0]]
 
         for pos in position_list:
-            self.create_bullet(self.air_plane_sprites.secondary_bullet_sprite, np.array(pos), self.direction_vector)
+            self.create_bullet(self.air_plane_sprites.secondary_bullet_sprite, np.array(pos),
+                               self.get_direction_vector())
 
