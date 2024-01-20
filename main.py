@@ -498,8 +498,9 @@ class FightingAircraftGame:
                 new_flak.target_obj = self.player_plane
                 sprite, rect = self.game_resources.get_bullet_sprite('turret')
                 new_flak.set_sprite(get_rect_sprite(rect, sprite))
-                sprite, rect = self.game_resources.get_bullet_sprite('bullet1')
+                sprite, rect = self.game_resources.get_bullet_sprite('bullet2')
                 new_flak.set_bullet_sprite(get_rect_sprite(rect, sprite))
+                new_flak.team_number = 2
 
                 self.list_turrets.append(new_flak)
 
@@ -631,10 +632,10 @@ class FightingAircraftGame:
                     # 首先利用精确检测看两者是否真正相交
                     if pygame.sprite.collide_mask(bullet, crashed[bullet][0]) is not None:
                         # 然后尝试给飞机对应的伤害
-                        if crashed[bullet][0].take_damage(bullet.get_damage()):
+                        if bullet.explode(crashed[bullet][0]):
                             print('enemy eliminated. ')
                         # print('attack it!')
-                        plane.bullet_group.remove(bullet)
+
                     # else:
                     #     print('not really crashed!')
 
@@ -643,6 +644,20 @@ class FightingAircraftGame:
                 turret.fixed_update(delta_time=delta_time)
                 for bullet in turret.bullet_group:
                     bullet.fixed_update(delta_time=delta_time)
+                # 碰撞检测
+                crashed = self.check_bullet_collision(turret)
+                if crashed:
+                    for bullet in crashed:
+                        # --------------------------------
+                        # 首先利用精确检测看两者是否真正相交
+                        if pygame.sprite.collide_mask(bullet, crashed[bullet][0]) is not None:
+                            # 然后尝试给飞机对应的伤害
+                            if bullet.explode(crashed[bullet][0]):
+                                print('enemy eliminated. ')
+                            # print('attack it!')
+                            plane.bullet_group.remove(bullet)
+                        # else:
+                        #     print('not really crashed!')
 
     def fixed_update(self):
         """
@@ -776,6 +791,13 @@ class FightingAircraftGame:
                             self.screen, (255, 0, 0),
                             (thumbnail_map_render_left + pos[0][0] * scale,
                              pos[1][0] * scale), 2)
+                    for turret in self.list_turrets:
+                        pos = turret.get_position()
+                        pygame.draw.circle(
+                            self.screen, (0, 0, 255),
+                            (thumbnail_map_render_left + pos[0][0] * scale,
+                             pos[1][0] * scale), 2)
+
                     # 然后绘制框框
                     pos = self.player_plane.get_position()
                     pygame.draw.rect(

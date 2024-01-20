@@ -17,13 +17,22 @@ class Bullet(DynamicObject):
     def get_sprite(self):
         return self.image
 
+    def explode(self, target):
+        self.parent.bullet_group.remove(self)
+        # 返回真表示攻击目标已死亡，假表示未死亡
+        if target is not None:
+            return target.take_damage(self._damage)
+        else:
+            return False
+
+
     def fixed_update(self, delta_time):
         self.time_passed += delta_time
         pos, _ = self.move(delta_time=delta_time)
         self.set_position(pos)
         # 如果自己的生命周期到了，那么就自己从父亲的子弹列表中删除
         if self.is_bullet_expired():
-            self.parent.bullet_group.remove(self)
+            self.explode(None)
 
     def set_parent(self, parent):
         """
