@@ -188,29 +188,29 @@ class AirPlane(DynamicObject):
         self.max_speed = self.speed * 1.5
         self.min_speed = self.speed * 0.7
 
-    @overrides
-    def move(self, delta_time):
-        """
-        move函数并不会修改任何游戏数据，只是会根据从上一个逻辑帧出发经过的时间
-        计算得到目前实例应该在的位置
-        :param delta_time:
-        :return:
-        """
-        # ---------------------------------------------
-        # turn
-        direction_vector = self.direction_vector
-        ang_velocity_tmp = self.angular_velocity * delta_time * 0.06
-        rotation_matrix = np.array(
-            [[np.cos(np.radians(ang_velocity_tmp)), -np.sin(np.radians(ang_velocity_tmp))],
-             [np.sin(np.radians(ang_velocity_tmp)), np.cos(np.radians(ang_velocity_tmp))]])
-        direction_vector = np.dot(rotation_matrix, direction_vector)
-        # ---------------------------------------------
-        # move
-        _2d_velocity = int(
-            self.velocity * delta_time * 0.14 * np.cos(np.radians(self.pitch_attitude * 10))) * np.multiply(
-            direction_vector.reshape((2, 1)), np.array([1, -1]).reshape((2, 1)))
-
-        return self.get_position() + _2d_velocity, direction_vector
+    # @overrides
+    # def move(self, delta_time):
+    #     """
+    #     move函数并不会修改任何游戏数据，只是会根据从上一个逻辑帧出发经过的时间
+    #     计算得到目前实例应该在的位置
+    #     :param delta_time:
+    #     :return:
+    #     """
+    #     # ---------------------------------------------
+    #     # turn
+    #     direction_vector = self.direction_vector
+    #     ang_velocity_tmp = self.angular_velocity * delta_time * 0.06
+    #     rotation_matrix = np.array(
+    #         [[np.cos(np.radians(ang_velocity_tmp)), -np.sin(np.radians(ang_velocity_tmp))],
+    #          [np.sin(np.radians(ang_velocity_tmp)), np.cos(np.radians(ang_velocity_tmp))]])
+    #     direction_vector = np.dot(rotation_matrix, direction_vector)
+    #     # ---------------------------------------------
+    #     # move
+    #     _2d_velocity = int(
+    #         self.velocity * delta_time * 0.14 * np.cos(np.radians(self.pitch_attitude * 10))) * np.multiply(
+    #         direction_vector.reshape((2, 1)), np.array([1, -1]).reshape((2, 1)))
+    #
+    #     return self.get_position() + _2d_velocity, direction_vector
 
     def fixed_update(self, delta_time):
         """
@@ -396,9 +396,11 @@ class AirPlane(DynamicObject):
         # --------------------------------------------------------------------
         # 重置飞行状态
         self.input_state = InputState.NoInput
-
+        # 需要来一波偷梁换柱
+        real_velocity = self.velocity
+        self.velocity *= np.cos(np.radians(self.pitch_attitude * 10))
         pos, direction_vector = self.move(delta_time=delta_time)
-
+        self.velocity = real_velocity
         # 物理更新直接改变数值内容
         self.direction_vector = direction_vector
         self.set_position(pos)
@@ -426,6 +428,7 @@ class AirPlane(DynamicObject):
         new_bullet.set_speed(self.velocity + 5)
         new_bullet.set_direction_vector(direction)
         new_bullet._damage = 10
+        new_bullet.set_parent(parent=self)
         self.bullet_group.add(new_bullet)
 
     def create_bomb(self, bomb_sprite, local_position, direction):

@@ -20,11 +20,14 @@ def vector_2_angle(direction_vector, is_deg=True):
 
 def local_to_world(local_position, direction_vector, local_point):
     # 构造旋转矩阵
-    rotation_matrix_local_to_world = np.array([[direction_vector[0, 0], direction_vector[1, 0]],
-                                               [-direction_vector[1, 0], direction_vector[0, 0]]])
+    rotation_matrix_local_to_world = (
+        np.array([[direction_vector[0, 0], direction_vector[1, 0]],
+                  [-direction_vector[1, 0], direction_vector[0, 0]]]))
 
     # 将局部坐标转换为世界坐标
-    world_point = local_position + np.dot(rotation_matrix_local_to_world, local_point)
+    world_point = (
+            local_position +
+            np.dot(rotation_matrix_local_to_world, local_point.reshape((2, 1))))
 
     return world_point
 
@@ -156,6 +159,8 @@ class DynamicObject(StaticObject):
             [[np.cos(np.radians(ang_velocity_tmp)), -np.sin(np.radians(ang_velocity_tmp))],
              [np.sin(np.radians(ang_velocity_tmp)), np.cos(np.radians(ang_velocity_tmp))]])
         direction_vector = np.dot(rotation_matrix, direction_vector)
+        # 方向向量要归一化
+        direction_vector = direction_vector / np.linalg.norm(direction_vector)
         # ---------------------------------------------
         # move
         _2d_velocity = (int(self.velocity * delta_time * 0.1) *

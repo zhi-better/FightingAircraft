@@ -9,6 +9,7 @@ class Bullet(DynamicObject):
         self._damage = 0
         self.expired_time = 5000
         self.time_passed = 0
+        self.parent = None
 
     def is_bullet_expired(self):
         return self.time_passed >= self.expired_time
@@ -20,6 +21,17 @@ class Bullet(DynamicObject):
         self.time_passed += delta_time
         pos, _ = self.move(delta_time=delta_time)
         self.set_position(pos)
+        # 如果自己的生命周期到了，那么就自己从父亲的子弹列表中删除
+        if self.is_bullet_expired():
+            self.parent.bullet_group.remove(self)
+
+    def set_parent(self, parent):
+        """
+        设置是谁发射的这个子弹
+        :param parent:
+        :return:
+        """
+        self.parent = parent
 
     def get_damage(self):
         return self._damage

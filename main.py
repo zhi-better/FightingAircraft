@@ -494,7 +494,7 @@ class FightingAircraftGame:
 
                 new_flak = Flak()
                 new_flak.set_map_size(self.map_size)
-                new_flak.set_position(np.array([2200, 2100]))
+                new_flak.set_position(np.array([2200, 2200]))
                 new_flak.target_obj = self.player_plane
                 sprite, rect = self.game_resources.get_bullet_sprite('turret')
                 new_flak.set_sprite(get_rect_sprite(rect, sprite))
@@ -623,8 +623,6 @@ class FightingAircraftGame:
                                 'id': plane.get_air_plane_params().id}))
             for bullet in plane.bullet_group:
                 bullet.fixed_update(delta_time=delta_time)
-                if bullet.is_bullet_expired():
-                    plane.bullet_group.remove(bullet)
             # 碰撞检测
             crashed = self.check_bullet_collision(plane)
             if crashed:
@@ -643,6 +641,8 @@ class FightingAircraftGame:
             # 进行防空炮的更新
             for turret in self.list_turrets:
                 turret.fixed_update(delta_time=delta_time)
+                for bullet in turret.bullet_group:
+                    bullet.fixed_update(delta_time=delta_time)
 
     def fixed_update(self):
         """
@@ -751,6 +751,8 @@ class FightingAircraftGame:
                     # 进行防空炮的更新
                     for turret in self.list_turrets:
                         self.game_render.render_turret(turret=turret, delta_time=delta_time)
+                        for bullet in turret.bullet_group:
+                            self.game_render.render_bullet(bullet=bullet, delta_time=delta_time)
 
                     # 将文本绘制到屏幕上
                     self.screen.blit(text, (10, 10))

@@ -32,11 +32,12 @@ def calculate_lead_target_rotate_direction(target_vector, target_move_vector,
     lead_target_angle_sin = target_move_velocity / bullet_move_velocity * np.linalg.norm(
         np.cross(target_vector.reshape((1,2)), target_move_vector.reshape((1,2))))
     rad_lead_target = np.arcsin(lead_target_angle_sin)
-
+    # 此处根据四个象限应该是有四种情况用于计算
     rad_target = vector_2_angle(target_vector, is_deg=False)
+    # if rad_target
     rotate_target = rad_lead_target + rad_target
 
-    return np.array([np.cos(rotate_target), np.sin(rotate_target)]).reshape((2, 1))
+    return np.array([np.cos(rotate_target), -np.sin(rotate_target)]).reshape((2, 1))
 
 
 class Building(StaticObject):
@@ -71,6 +72,7 @@ class Turret(DynamicObject):
         self.velocity = 0
         self.angular_speed = 1
         self.bullet_velocity = 4  # 因为不能动，所以要设置的大一些
+        self.bullet_group = pygame.sprite.Group()
 
     def set_bullet_sprite(self, sprite):
         self.bullet_sprite = sprite
@@ -85,7 +87,7 @@ class Turret(DynamicObject):
         """
         # 注意此处要在基础的上面进行改动，是一种相对变化
         new_image = pygame.transform.rotate(
-            self.image, vector_2_angle(np.multiply(self.direction_vector, np.array([1, -1]).reshape((2, 1)))))
+            self.image, vector_2_angle(self.direction_vector))
         rect = new_image.get_rect()
         self.rect.width = rect.width
         self.rect.height = rect.height
@@ -108,7 +110,8 @@ class Turret(DynamicObject):
         new_bullet.set_speed(self.velocity + self.bullet_velocity)
         new_bullet.set_direction_vector(self.direction_vector)
         new_bullet.set_damage(self._bullet_damage)
-
+        new_bullet.set_parent(parent=self)
+        self.bullet_group.add(new_bullet)
         return new_bullet
 
 
@@ -121,8 +124,8 @@ class Flak(Turret):
         super().__init__()
         self.target_obj = None  # 表示攻击的目标
         self.round_bullet_count = 5  # 每轮发射子弹时候的子弹数量
-        self.round_shoot_interval = 15  # 每轮设计过程中子弹发射间隔
-        self.round_interval = 120  # 每轮发射之间的时间间隔
+        self.round_shoot_interval = 4  # 每轮设计过程中子弹发射间隔
+        self.round_interval = 80  # 每轮发射之间的时间间隔
         self.weapon_cool_down_timer = 0  # 辅助判断发射冷却时间的计数器
 
     def fixed_update(self, delta_time):
@@ -139,33 +142,34 @@ class Flak(Turret):
                     等待
         '''
         if self.target_obj:
-            pos = self.target_obj.get_position()
+            pos_target = self.target_obj.get_position()
             velocity = self.target_obj.velocity
-            direction_vector = self.target_obj.direction_vector
-            target_vector = pos - self.get_position()
+            target_direction_vector = self.target_obj.direction_vector
+            target_vector = pos_target - self.get_position()
             # 旋转炮台瞄准
             turret_rotate_target_vector = calculate_lead_target_rotate_direction(
-                target_vector=target_vector, target_move_vector=direction_vector,
+                target_vector=target_vector, target_move_vector=target_direction_vector,
                 target_move_velocity=velocity, bullet_move_velocity=self.bullet_velocity
             )
+
             # 调用父类的旋转的代码，首先判断防空炮应该旋转的位置
-            cross_result = float(np.dot(self.direction_vector.T, turret_rotate_target_vector))
+            # cross_result = -float(np.dot(self.direction_vector.T, turret_rotate_target_vector))
             # self.angular_velocity = -float(self.angular_speed * np.sign(cross_result))
-            self.angular_velocity = 1
+            self.direction_vector = turret_rotate_target_vector
+
             pos, direction_vector = self.move(delta_time=delta_time)
             self.set_position(pos)
             self.direction_vector = direction_vector
             # 如果实际炮塔角度和理想角度比较接近的话就可以开火了
             vector_angle_cos = float(np.dot(self.direction_vector.T, turret_rotate_target_vector))
             if vector_angle_cos > 0.9:
-                self.direction_vector = turret_rotate_target_vector
                 if self.weapon_cool_down_timer > self.round_interval:
                     self.weapon_cool_down_timer = 0
                 # 如果刚好满足发射间隔要求并且未超过发射的最大数量，直接发射
                 if (self.weapon_cool_down_timer % self.round_shoot_interval == 0
                         and self.weapon_cool_down_timer < self.round_shoot_interval * self.round_bullet_count):
-                    # self.fire(local_position=np.array([0, 30]).reshape((2, 1)))
-                    print('fired!')
+                    self.fire(local_position=np.array([30, 0]).reshape((2, 1)))
+                    # print('fired!')
             # else:
             #     print(vector_angle_cos)
 
