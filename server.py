@@ -234,5 +234,6 @@ if __name__ == '__main__':
     #     print('Invalid command. Use --start-server or --other-command.')
     server = FightingAircraftGameServer()
     server.room_max_player_number = int(args.room_max_player_number)
+    server.room_max_player_number = 1
     server.server_start()
 

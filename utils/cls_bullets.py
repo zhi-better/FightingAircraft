@@ -19,6 +19,8 @@ class Bullet(DynamicObject):
 
     def explode(self, target):
         self.parent.bullet_group.remove(self)
+        # 释放自身资源
+        self.kill()
         # 返回真表示攻击目标已死亡，假表示未死亡
         if target is not None:
             return target.take_damage(self._damage)

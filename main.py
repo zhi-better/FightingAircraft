@@ -22,6 +22,7 @@ import numpy as np
 from utils.SocketTcpTools import *
 from utils.cls_airplane import *
 from utils.cls_building import *
+from utils.cls_explode import Explode
 from utils.cls_game_render import *
 
 def setup_logging(log_file_path):
@@ -227,6 +228,15 @@ class GameResources:
 
         return self.temporary_sub_textures[bullet_key], self.temporary_sprite
 
+    def get_turret_sprite(self, bullet_key='turret'):
+        """
+        加载炮管的精灵，参数为子弹的键
+        :param bullet_key: turret -> turret0 -> turret4
+        :return:
+        """
+
+        return self.temporary_sub_textures[bullet_key], self.temporary_sprite
+
     def get_building_sprite(self, building_key, state='body'):
         """
         加载建筑的精灵
@@ -284,7 +294,7 @@ class GameResources:
         # 返回图片路径和映射字典
         return 'objects/' + image_path, roll_mapping, pitch_mapping
 
-    def get_plane(self, plane_name):
+    def get_plane(self, plane_name, list_explodes):
         param = self.airplane_info_map[plane_name]
         image_path, roll_mapping, pitch_mapping = self.load_plane_sprites(
             'objects/{}.xml'.format(plane_name))
@@ -295,13 +305,13 @@ class GameResources:
         plane_type = PlaneType(data['planes'][plane_name]['type'])
 
         if plane_type == PlaneType.Fighter:
-            plane = FighterJet()
+            plane = FighterJet(list_explodes)
         elif plane_type == PlaneType.AttackAircraft:
-            plane = AttackAircraft()
+            plane = AttackAircraft(list_explodes)
         elif plane_type == PlaneType.Bomber:
-            plane = Bomber()
+            plane = Bomber(list_explodes)
         else:
-            plane = Bomber()
+            plane = Bomber(list_explodes)
 
         plane.set_speed(param['speed'])
         plane.angular_speed = param['turnspeed']
@@ -324,7 +334,12 @@ class GameResources:
         # 注意此处获取的 sprite 应该旋转 90 度
         sprite, rect = self.get_bullet_sprite('bullet' + str(param['secondweapon']))
         plane.air_plane_sprites.secondary_bullet_sprite = get_rect_sprite(rect, sprite)
-        # plane.get_sprite()
+
+        explode_sub_textures, explode_sprite = self.get_explode_animation()
+        plane.explode_sub_textures = explode_sub_textures
+        plane.explode_sprite = explode_sprite
+        # 刷新一下对应的 sprite, 防止出 bug
+        plane.get_sprite()
 
         return plane
 
@@ -384,13 +399,31 @@ class FightingAircraftGame:
         self.lock = threading.RLock()  # 线程锁，保证渲染和物理运算的顺序
         self.thread_render = None  # 渲染线程
         self.thread_fixed_update = None  # 逻辑运算线程
+
+        # ----------------------------------------------------------------
+        '''
+        关于此处游戏总体设计方案的修改更新：
+        1. 飞机管理采用一个统一的飞机链表
+        2. 关于碰撞检测采用两个Group, 分别用来存储对应的 team1 和 team2 的碰撞单位
+        3. 炮台由于本身有两个部分：底座和可旋转的炮管，需要单独一个list进行渲染
+        4. 对于房屋，有两个不同的状态：完好和摧毁，需要单独一个list进行渲染
+        '''
         # 为了便于更新内容，创建了三个组，分别是：所有飞机，敌方飞机，我方飞机
         self.id_plane_mapping: Dict[int, AirPlane] = {}
         # 便于碰撞检测
         self.team1_group = pygame.sprite.Group()
         self.team2_group = pygame.sprite.Group()
         # 制作一个list保存所有游戏里面需要物理更新的内容
+        # 采用一个 objects 的 map 保存所有的物品及对应的内容，不用整其他花里胡哨的内容
+        self.game_objects = {}
         self.list_turrets: List[Turret] = []
+        self.list_buildings: List[Building] = []
+        self.list_explodes: List[Explode] = []
+        # # 将所有的物体全部包含在 map 中
+        # self.game_objects['turrets'] = self.list_turrets
+        # self.game_objects['buildings'] = self.list_buildings
+        # self.game_objects['explodes'] = self.list_explodes
+
         # 游戏运行日志
         self.is_use_logger = False
         self.logger_file_name = 'run_physic.log'
@@ -455,7 +488,6 @@ class FightingAircraftGame:
             self.clock_sync.tick(self.fps_sync)  # 获取时间差，控制帧率
 
     def callback_recv(self, cmd, params):
-
         if cmd == CallbackCommand.RecvData:
             data = params['data']
             data = json.loads(data.decode())
@@ -474,35 +506,47 @@ class FightingAircraftGame:
 
                 planes = data['planes']
                 for plane_info in planes:
+                    new_plane = self.game_resources.get_plane(plane_info['plane_name'], self.list_explodes)
+                    new_plane.set_map_size(self.map_size)
+                    new_plane.set_position(np.array([plane_info['position_x'], plane_info['position_y']]))
+                    new_plane.get_air_plane_params().id = plane_info['player_id']
+                    self.id_plane_mapping[plane_info['player_id']] = new_plane
                     if plane_info['player_id'] == self.player_id:
                         # 加载飞机
-                        self.player_plane = self.game_resources.get_plane(plane_info['plane_name'])
-                        self.player_plane.set_map_size(self.map_size)
-                        self.player_plane.set_position(np.array([plane_info['position_x'], plane_info['position_y']]))
-                        self.player_plane.get_air_plane_params().id = plane_info['player_id']
+                        self.player_plane = new_plane
                         self.player_plane.team_number = 1
-                        self.team1_group.add(self.player_plane)
-                        self.id_plane_mapping[plane_info['player_id']] = self.player_plane
+                        self.team1_group.add(new_plane)
                     else:
-                        new_plane = self.game_resources.get_plane(plane_info['plane_name'])
-                        new_plane.set_map_size(self.map_size)
-                        new_plane.set_position(np.array([plane_info['position_x'], plane_info['position_y']]))
-                        new_plane.get_air_plane_params().id = plane_info['player_id']
                         new_plane.team_number = 2
                         self.team2_group.add(new_plane)
-                        self.id_plane_mapping[plane_info['player_id']] = new_plane
 
-                new_flak = Flak()
-                new_flak.set_map_size(self.map_size)
-                new_flak.set_position(np.array([2200, 2200]))
-                new_flak.target_obj = self.player_plane
-                sprite, rect = self.game_resources.get_bullet_sprite('turret')
-                new_flak.set_sprite(get_rect_sprite(rect, sprite))
-                sprite, rect = self.game_resources.get_bullet_sprite('bullet2')
-                new_flak.set_bullet_sprite(get_rect_sprite(rect, sprite))
-                new_flak.team_number = 2
-
-                self.list_turrets.append(new_flak)
+                # ----------------------------------------------------------------
+                # 防空炮构造
+                # new_flak = Flak()
+                # new_flak.set_map_size(self.map_size)
+                # new_flak.set_position(np.array([2200, 2200]))
+                # new_flak.target_obj = self.player_plane
+                # sprite, rect = self.game_resources.get_turret_sprite('turret')
+                # new_flak.set_sprite(get_rect_sprite(rect, sprite))
+                # sprite, rect = self.game_resources.get_bullet_sprite('bullet2')
+                # new_flak.set_bullet_sprite(get_rect_sprite(rect, sprite))
+                # new_flak.team_number = 2
+                #
+                # self.list_turrets.append(new_flak)
+                # self.team2_group.add((new_flak))
+                # ---------------------------------------------------------------
+                # 房屋构建
+                new_building = Building(render_list=self.list_buildings, list_explodes=self.list_explodes)
+                new_building.set_map_size(self.map_size)
+                sprite, rect = self.game_resources.get_building_sprite('building01', state='body')
+                new_building.body_sprite = get_rect_sprite(rect, sprite)
+                sprite, rect = self.game_resources.get_building_sprite('building01', state='ruins')
+                new_building.ruin_sprite = get_rect_sprite(rect, sprite)
+                new_building.set_sprite(new_building.body_sprite)
+                new_building.set_position(np.array([2500, 2200]))
+                new_building.team_number = 2
+                self.list_buildings.append(new_building)
+                self.team2_group.add((new_building))
 
                 self.local_physic_time_stamp = 0
                 # self.local_render_time_stamp = 0
@@ -632,8 +676,15 @@ class FightingAircraftGame:
                     # 首先利用精确检测看两者是否真正相交
                     if pygame.sprite.collide_mask(bullet, crashed[bullet][0]) is not None:
                         # 然后尝试给飞机对应的伤害
-                        if bullet.explode(crashed[bullet][0]):
+                        sprite = crashed[bullet][0]
+                        if bullet.explode(sprite):
                             print('enemy eliminated. ')
+                            sprite.on_death()
+                            # 从碰撞检测中移除该目标
+                            if sprite.team_number == 1:
+                                self.team2_group.remove(sprite)
+                            else:
+                                self.team1_group.remove(sprite)
                         # print('attack it!')
 
                     # else:
@@ -746,28 +797,35 @@ class FightingAircraftGame:
                     delta_time = self.render_frame_idx * render_frame_time_diff
                     pos, dir_v = self.player_plane.move(delta_time=delta_time)
                     self.game_render.render_map(pos, screen=self.screen)
-                    text = font.render(
-                        'Engine temperature: {:.2f}, Speed: {:.2f}, position: [{:.2f}, {:.2f}]'.format(
-                            self.player_plane.get_engine_temperature(), self.player_plane.velocity,
-                            pos[0][0], pos[1][0]),
-                        True, (0, 0, 0))
-                    for plane in self.team1_group:
-                        self.game_render.render_plane(plane=plane, team_id=1, delta_time=delta_time)
-                        # print('\r obj count: {}'.format(len(self.player_plane.bullet_list)), end='')
-                        for bullet in plane.bullet_group:
-                            self.game_render.render_bullet(bullet=bullet, delta_time=delta_time)
-                    for plane in self.team2_group:
-                        # pos, dir_v = plane.move(delta_time=self.render_delta_time)
-                        self.game_render.render_plane(plane=plane, team_id=2, delta_time=delta_time)
-                        # print('\r obj count: {}'.format(len(self.player_plane.bullet_list)), end='')
-                        for bullet in plane.bullet_group:
-                            self.game_render.render_bullet(bullet=bullet, delta_time=delta_time)
 
+                    # ----------------------------------------------------------------
+                    # 地面内容更新
                     # 进行防空炮的更新
                     for turret in self.list_turrets:
                         self.game_render.render_turret(turret=turret, delta_time=delta_time)
                         for bullet in turret.bullet_group:
                             self.game_render.render_bullet(bullet=bullet, delta_time=delta_time)
+
+                    # 进行建筑的更新
+                    for building in self.list_buildings:
+                        self.game_render.render_building(building=building)
+
+                    # -----------------------------------------------------------------
+                    # 空中物体更新
+                    text = font.render(
+                        'Engine temperature: {:.2f}, Speed: {:.2f}, position: [{:.2f}, {:.2f}]'.format(
+                            self.player_plane.get_engine_temperature(), self.player_plane.velocity,
+                            pos[0][0], pos[1][0]),
+                        True, (0, 0, 0))
+                    for plane in self.id_plane_mapping.values():
+                        self.game_render.render_plane(plane=plane, team_id=plane.team_number,
+                                                      delta_time=delta_time)
+                        # print('\r obj count: {}'.format(len(self.player_plane.bullet_list)), end='')
+                        for bullet in plane.bullet_group:
+                            self.game_render.render_bullet(bullet=bullet, delta_time=delta_time)
+
+                    for explode in self.list_explodes:
+                        self.game_render.render_building(building=explode)
 
                     # 将文本绘制到屏幕上
                     self.screen.blit(text, (10, 10))
@@ -779,22 +837,30 @@ class FightingAircraftGame:
                         (thumbnail_map_render_left, 0))
                     scale = thumbnail_map_sprite_rect.width / self.map_size[0]
                     # 然后根据小地图的位置来显示不同的飞机在缩略图中的位置
-                    for plane in self.team1_group:
+                    for plane in self.id_plane_mapping.values():
                         pos = plane.get_position()
-                        pygame.draw.circle(
-                            self.screen, (0, 255, 0),
-                            (thumbnail_map_render_left + pos[0][0] * scale,
-                             pos[1][0] * scale), 2)
-                    for plane in self.team2_group:
-                        pos = plane.get_position()
-                        pygame.draw.circle(
-                            self.screen, (255, 0, 0),
-                            (thumbnail_map_render_left + pos[0][0] * scale,
-                             pos[1][0] * scale), 2)
+                        if plane.team_number == 1:
+                            pygame.draw.circle(
+                                self.screen, (0, 255, 0),
+                                (thumbnail_map_render_left + pos[0][0] * scale,
+                                 pos[1][0] * scale), 2)
+                        else:
+                            pygame.draw.circle(
+                                    self.screen, (255, 0, 0),
+                                    (thumbnail_map_render_left + pos[0][0] * scale,
+                                     pos[1][0] * scale), 2)
+
                     for turret in self.list_turrets:
                         pos = turret.get_position()
                         pygame.draw.circle(
                             self.screen, (0, 0, 255),
+                            (thumbnail_map_render_left + pos[0][0] * scale,
+                             pos[1][0] * scale), 2)
+
+                    for building in self.list_buildings:
+                        pos = building.get_position()
+                        pygame.draw.circle(
+                            self.screen, (0, 125, 125),
                             (thumbnail_map_render_left + pos[0][0] * scale,
                              pos[1][0] * scale), 2)
 

@@ -49,8 +49,27 @@ class GameRender:
             tile_rect = pg.Rect(0, 0, 0, 0)
         return tile_rect
 
+    def render_building(self, building):
+        """
+        渲染建筑，建筑不会动
+        :param building:
+        :return:
+        """
+        sprite = building.get_sprite()
+        plane_rect, should_render = (
+            self.get_object_render_rect(sprite, building.get_position()))
+        if should_render:
+            self.screen.blit(sprite, plane_rect)
+
+        if self.draw_collision_box:
+            # 创建一个充气的矩形，以便在原始矩形周围绘制边框
+            inflated_rect = plane_rect.inflate(2, 2)  # 边框大小为4像素
+            pygame.draw.rect(self.screen, (255, 0, 0), inflated_rect, 2)  # 绘制红色边框
+
     def render_turret(self, turret, delta_time):
         """
+        渲染炮台，炮台包含两个部位：
+        基底和攻击的炮管
         :param turret:
         :return:
         """

@@ -42,31 +42,39 @@ def calculate_lead_target_position(target_relative_position, target_move_directi
 
     return np.array([np.cos(rotate_target), -np.sin(rotate_target)]).reshape((2, 1))
 
+
 class Building(StaticObject):
     """
     普通建筑
     """
-
-    def __init__(self):
+    def __init__(self, render_list, list_explodes):
         super().__init__()
+        self.list_explodes = list_explodes
+        self.render_list = render_list
         self.durability = 1000  # 建筑的耐久度
+        self.body_sprite = None     # 常规的建筑的精灵
+        self.ruin_sprite = None     # 被破坏后的建筑的精灵
 
     def take_damage(self, damage):
         self.durability -= damage
         if self.durability <= 0:
-            print('building destroyed!')
+            self.on_death()
             return True
         else:
             return False
 
+    def on_death(self):
+        print('building destroyed!')
+        self.set_sprite(self.ruin_sprite)
 
-class Turret(DynamicObject):
+
+class Turret(DynamicObject, Building):
     """
     炮台的基类，主要用于控制发射子弹等操作
     """
-
-    def __init__(self):
-        super().__init__()
+    def __init__(self, render_list, list_explodes):
+        Building.__init__(self, render_list, list_explodes)
+        DynamicObject.__init__(self)
         self.bullet_sprite = None
         self._bullet_damage = 2
         self.team_number = 0
@@ -177,32 +185,6 @@ class Flak(Turret):
                     # print('fired!')
             # else:
             #     print(vector_angle_cos)
-
-
-class BFlak(StaticObject):
-    """
-    防空炮
-    """
-
-    def __init__(self):
-        super().__init__()
-        self.target_obj = None  # 表示攻击的目标
-        self.round_bullet_count = 5  # 每轮发射子弹时候的子弹数量
-        self.round_shoot_interval = 2  # 每轮设计过程中子弹发射间隔
-        self.round_interval = 6  # 每轮发射之间的时间间隔
-
-    def detect_target_obj(self, objs):
-        """
-        根据自身位置和物体的位置来寻找到自身的攻击目标
-        :param objs:
-        :return:
-        """
-
-    def fire(self):
-        """
-        发射子弹，每次发射一轮
-        :return:
-        """
 
 
 class Tower(StaticObject):

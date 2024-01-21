@@ -70,8 +70,11 @@ class StaticObject(pygame.sprite.Sprite):
         self.rect = pygame.Rect(0, 0, 0, 0)
         self.image = None
         self.collision_box = None
-
+        self.team_number = 0
         self._map_size = np.array([0, 0])
+
+        self.render_list_parent = []    # 表示渲染时的父链表
+        self.physic_list_parent = []    # 表示进行碰撞检测时的父链表
 
     def set_map_size(self, map_size):
         self._map_size = map_size
@@ -99,6 +102,9 @@ class StaticObject(pygame.sprite.Sprite):
     def set_position(self, vector_2d):
         if self._map_size[0] == 0 or self._map_size[1] == 0:
             Warning('please set map size first!!!')
+        if self.rect.width == 0 or self.rect.height == 0:
+            # Warning('please set sprite size first!!!')
+            print('please set sprite size first!!!')
         # 更新对应的 Sprite 的位置
         vector_2d[0] = vector_2d[0] % self._map_size[0]
         vector_2d[1] = vector_2d[1] % self._map_size[1]
@@ -121,6 +127,16 @@ class StaticObject(pygame.sprite.Sprite):
     def fixed_update(self, delta_time):
         """
         每一个子类都需要重写物理运算的函数内容，并在里面完成自己的物理运算
+        :param delta_time:
+        :return:
+        """
+        pass
+
+
+    def on_death(self):
+        """
+        可以说是从游戏的物理运算中去除的时候应该执行的操作
+        :param screen:
         :param delta_time:
         :return:
         """

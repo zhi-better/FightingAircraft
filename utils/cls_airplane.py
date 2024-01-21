@@ -4,6 +4,7 @@ import numpy as np
 import pygame
 from overrides import overrides
 from utils.cls_bullets import *
+from utils.cls_explode import Explode
 from utils.cls_obj import *
 from abc import ABCMeta, abstractmethod
 
@@ -86,8 +87,11 @@ class AirPlaneParams:
 
 
 class AirPlane(DynamicObject):
-    def __init__(self):
+    def __init__(self, list_explodes):
         super().__init__()
+        self.list_explodes = list_explodes
+        self.explode_sub_textures = []
+        self.explode_sprite = None
         self.plane_type = PlaneType.Simple
         self.image_template = None
         self.air_plane_sprites = AirPlaneSprites()
@@ -105,7 +109,6 @@ class AirPlane(DynamicObject):
         self.secondary_weapon_reload_counter = 0
         self.map_size = np.array([])
         self.bullet_group = pygame.sprite.Group()
-        self.team_number = 0
 
     def load_sprite(self, img_file_name):
         self.image_template = pygame.image.load(img_file_name)
@@ -424,8 +427,19 @@ class AirPlane(DynamicObject):
         new_bullet._damage = 10
         self.bullet_group.add(new_bullet)
 
+    def on_death(self):
+        """
+        死亡前做点事情吧
+        :return:
+        """
+        # self.explode = Explode(self.list_explodes)
+        # self.explode.set_explode_sprites(
+        #     self.explode_sub_textures, self.explode_sprite)
+        # self.explode.set_position(self.get_position())
+
     @abstractmethod
     def primary_weapon_attack(self):
+        self.on_death()
         pass
 
     @abstractmethod
@@ -434,8 +448,8 @@ class AirPlane(DynamicObject):
 
 
 class FighterJet(AirPlane):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, list_explodes):
+        super().__init__(list_explodes)
         self.plane_type = PlaneType.Fighter
         self.primary_weapon_type = WeaponType.Weapon_None
         self.secondary_weapon_type = WeaponType.Weapon_None
@@ -463,8 +477,8 @@ class FighterJet(AirPlane):
 
 
 class AttackAircraft(AirPlane):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, list_explodes):
+        super().__init__(list_explodes)
         self.plane_type = PlaneType.AttackAircraft
 
     def primary_weapon_attack(self):
@@ -475,8 +489,8 @@ class AttackAircraft(AirPlane):
 
 
 class Bomber(AirPlane):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, list_explodes):
+        super().__init__(list_explodes)
         self.plane_type = PlaneType.Bomber
         self.primary_weapon_type = WeaponType.Weapon_None
         self.secondary_weapon_type = WeaponType.Weapon_None
