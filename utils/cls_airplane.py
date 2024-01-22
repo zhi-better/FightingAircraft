@@ -170,7 +170,7 @@ class AirPlane(DynamicObject, Building):
         else:
             rect_dic = self.air_plane_sprites.roll_mapping[int(0)]
 
-        self.image = get_rect_sprite(self.image_template, rect_dic)
+        self.image = get_rect_sprite((rect_dic, self.image_template))
         self.image = pygame.transform.rotate(
             self.image, vector_2_angle(self.get_direction_vector()))
         rect = self.image.get_rect()

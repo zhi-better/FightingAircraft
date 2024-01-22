@@ -32,7 +32,8 @@ def local_to_world(local_position, direction_vector, local_point):
     return world_point
 
 
-def get_rect_sprite(sprite, rect_dic):
+def get_rect_sprite(params):
+    rect_dic, sprite = params
     plane_rect = pygame.Rect(rect_dic['x'], rect_dic['y'], rect_dic['width'], rect_dic['height'])
     plane_sprite_subsurface = sprite.subsurface(plane_rect)
 

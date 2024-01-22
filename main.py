@@ -2,6 +2,7 @@ import base64
 import json
 import logging
 import os
+from memory_profiler import profile
 import random
 import struct
 import sys
@@ -24,6 +25,7 @@ from utils.cls_airplane import *
 from utils.cls_building import *
 from utils.cls_explode import Explode
 from utils.cls_game_render import *
+
 
 def setup_logging(log_file_path):
     """
@@ -63,6 +65,7 @@ def setup_logging(log_file_path):
     logger.addHandler(console_handler)
 
     return logger
+
 
 class CommandType(Enum):
     cmd_none = 0
@@ -329,11 +332,11 @@ class GameResources:
         plane.air_plane_sprites.roll_mapping = roll_mapping
         plane.air_plane_sprites.pitch_mapping = pitch_mapping
         # 设置主武器和副武器的贴图资源
-        sprite, rect = self.get_bullet_sprite('bullet' + str(param['mainweapon'] + 1))
-        plane.air_plane_sprites.primary_bullet_sprite = get_rect_sprite(rect, sprite)
+        plane.air_plane_sprites.primary_bullet_sprite = get_rect_sprite(
+            self.get_bullet_sprite('bullet' + str(param['mainweapon'] + 1)))
         # 注意此处获取的 sprite 应该旋转 90 度
-        sprite, rect = self.get_bullet_sprite('bullet' + str(param['secondweapon']))
-        plane.air_plane_sprites.secondary_bullet_sprite = get_rect_sprite(rect, sprite)
+        plane.air_plane_sprites.secondary_bullet_sprite = get_rect_sprite(
+            self.get_bullet_sprite('bullet' + str(param['secondweapon'])))
 
         explode_sub_textures, explode_sprite = self.get_explode_animation()
         plane.explode_sub_textures = explode_sub_textures
@@ -391,11 +394,11 @@ class FightingAircraftGame:
         self.local_physic_time_stamp = 0  # 物理运行的帧率计数
         self.local_render_time_stamp = 0  # 渲染运行的帧率计数
         self.local_sync_time_stamp = 0  # 同步帧的帧数计数
-        self.sync_frames_cache = []     # 从服务器同步的渲染帧缓存数组
-        self.history_frames = []        # 整局游戏的所有运行的历史逻辑帧记录，用于历史记录回放等操作
+        self.sync_frames_cache = []  # 从服务器同步的渲染帧缓存数组
+        self.history_frames = []  # 整局游戏的所有运行的历史逻辑帧记录，用于历史记录回放等操作
 
-        self.is_game_ready = False      # 游戏是否开始
-        self.exit_event = threading.Event() # 游戏是否结束的退出事件
+        self.is_game_ready = False  # 游戏是否开始
+        self.exit_event = threading.Event()  # 游戏是否结束的退出事件
         self.lock = threading.RLock()  # 线程锁，保证渲染和物理运算的顺序
         self.thread_render = None  # 渲染线程
         self.thread_fixed_update = None  # 逻辑运算线程
@@ -416,6 +419,7 @@ class FightingAircraftGame:
         # 制作一个list保存所有游戏里面需要物理更新的内容
         # 采用一个 objects 的 map 保存所有的物品及对应的内容，不用整其他花里胡哨的内容
         self.game_objects = {}
+
         self.list_turrets: List[Turret] = []
         self.list_buildings: List[Building] = []
         self.list_explodes: List[Explode] = []
@@ -522,26 +526,32 @@ class FightingAircraftGame:
 
                 # ----------------------------------------------------------------
                 # 防空炮构造
-                # new_flak = Flak()
-                # new_flak.set_map_size(self.map_size)
-                # new_flak.set_position(np.array([2200, 2200]))
-                # new_flak.target_obj = self.player_plane
-                # sprite, rect = self.game_resources.get_turret_sprite('turret')
-                # new_flak.set_sprite(get_rect_sprite(rect, sprite))
-                # sprite, rect = self.game_resources.get_bullet_sprite('bullet2')
-                # new_flak.set_bullet_sprite(get_rect_sprite(rect, sprite))
-                # new_flak.team_number = 2
-                #
-                # self.list_turrets.append(new_flak)
-                # self.team2_group.add((new_flak))
+                new_flak = Flak(render_list=self.list_turrets, list_explodes=self.list_explodes)
+                new_flak.set_map_size(self.map_size)
+                new_flak.set_position(np.array([2200, 2200]))
+                new_flak.target_obj = self.player_plane
+                new_flak.set_turret_sprites(
+                    get_rect_sprite(self.game_resources.get_turret_sprite('turret0')),
+                    get_rect_sprite(self.game_resources.get_building_sprite('flak1', 'body')),
+                    get_rect_sprite(self.game_resources.get_building_sprite('flak1', 'body'))
+                )
+                new_flak.set_bullet_sprite(
+                    get_rect_sprite(self.game_resources.get_bullet_sprite('bullet2')))
+                explode_sub_textures, explode_sprite = self.game_resources.get_explode_animation('explode05')
+                new_flak.explode_sub_textures = explode_sub_textures
+                new_flak.explode_sprite = explode_sprite
+                new_flak.team_number = 2
+                new_flak.all_planes = self.id_plane_mapping.values()
+                self.list_turrets.append(new_flak)
+                self.team2_group.add((new_flak))
                 # ---------------------------------------------------------------
                 # 房屋构建
                 new_building = Building(render_list=self.list_buildings, list_explodes=self.list_explodes)
                 new_building.set_map_size(self.map_size)
-                sprite, rect = self.game_resources.get_building_sprite('building01', state='body')
-                new_building.body_sprite = get_rect_sprite(rect, sprite)
-                sprite, rect = self.game_resources.get_building_sprite('building01', state='ruins')
-                new_building.ruin_sprite = get_rect_sprite(rect, sprite)
+                new_building.body_sprite = get_rect_sprite(
+                    self.game_resources.get_building_sprite('building01', state='body'))
+                new_building.ruin_sprite = get_rect_sprite(
+                    self.game_resources.get_building_sprite('building01', state='ruins'))
                 new_building.set_sprite(new_building.body_sprite)
                 new_building.set_position(np.array([2500, 2200]))
                 explode_sub_textures, explode_sprite = self.game_resources.get_explode_animation()
@@ -676,7 +686,7 @@ class FightingAircraftGame:
                         if bullet.explode(sprite):
                             print('enemy eliminated. ')
                             sprite.on_death()
-            self.team2_group.remove(sprite)
+                            self.team2_group.remove(sprite)
         else:
             print('unknown team_number: {}'.format(plane.team_number))
         # return crashed
@@ -712,7 +722,6 @@ class FightingAircraftGame:
         # 爆炸效果的更新
         for explode in self.list_explodes:
             explode.fixed_update(delta_time=delta_time)
-
 
     def fixed_update(self):
         """
@@ -750,7 +759,8 @@ class FightingAircraftGame:
                     sync_2_physic_frame = sync_frame['sync_time_stamp'] * frame_step
                     # if (self.local_physic_time_stamp % frame_step == 0
                     #         and self.local_physic_time_stamp == sync_2_physic_frame):
-                    while (sync_frame['sync_time_stamp'] - 1) * frame_step < self.local_physic_time_stamp <= sync_2_physic_frame:
+                    while (sync_frame[
+                               'sync_time_stamp'] - 1) * frame_step < self.local_physic_time_stamp <= sync_2_physic_frame:
                         # 先更新飞机的输入状态
                         self.update_plane_input_state(sync_frame['actions'])
                         # 物理运算
@@ -760,7 +770,8 @@ class FightingAircraftGame:
                     # 删除目前已经运行的逻辑帧
                     if self.is_use_logger:
                         self.logger.debug(
-                            json.dumps({'physic_frame': self.local_physic_time_stamp, 'actions': sync_frame['actions']}))
+                            json.dumps(
+                                {'physic_frame': self.local_physic_time_stamp, 'actions': sync_frame['actions']}))
                     self.sync_frames_cache.remove(sync_frame)
                     self.local_sync_time_stamp += 1
 
@@ -781,7 +792,6 @@ class FightingAircraftGame:
 
             # self.input_manager()  # 输入管理
             self.clock_fixed_update.tick(self.fps_physics)  # 获取时间差，控制帧率
-
 
     def render(self):
         print('render thread started. ')
@@ -829,7 +839,7 @@ class FightingAircraftGame:
                             self.game_render.render_bullet(bullet=bullet, delta_time=delta_time)
 
                     for explode in self.list_explodes:
-                        self.game_render.render_building(building=explode)
+                        self.game_render.render_explode(explode=explode)
 
                     # 将文本绘制到屏幕上
                     self.screen.blit(text, (10, 10))
@@ -850,9 +860,9 @@ class FightingAircraftGame:
                                  pos[1][0] * scale), 2)
                         else:
                             pygame.draw.circle(
-                                    self.screen, (255, 0, 0),
-                                    (thumbnail_map_render_left + pos[0][0] * scale,
-                                     pos[1][0] * scale), 2)
+                                self.screen, (255, 0, 0),
+                                (thumbnail_map_render_left + pos[0][0] * scale,
+                                 pos[1][0] * scale), 2)
 
                     for turret in self.list_turrets:
                         pos = turret.get_position()
@@ -894,6 +904,11 @@ class FightingAircraftGame:
             # delta_time = 1000 / self.fps_render
 
 
-if __name__ == '__main__':
+# @profile
+def main():
     game = FightingAircraftGame()
     game.init_game()
+
+
+if __name__ == '__main__':
+    main()

@@ -43,11 +43,29 @@ class GameRender:
             else:
                 rec_y = tile_id // 8
             tile_rect = pg.Rect(rec_x * tile_width, rec_y * tile_height,
-                                    tile_width, tile_height)
+                                tile_width, tile_height)
         else:
             print('wrong tile id: {}'.format(tile_id))
             tile_rect = pg.Rect(0, 0, 0, 0)
         return tile_rect
+
+    def render_explode(self, explode):
+        """
+        渲染建筑，建筑不会动
+        :param explode:
+        :return:
+        """
+        sprite = explode.get_sprite()
+        plane_rect, should_render = (
+            self.get_object_render_rect(sprite, explode.get_position()))
+        if should_render:
+            self.screen.blit(sprite, plane_rect)
+
+        if self.draw_collision_box:
+            # 创建一个充气的矩形，以便在原始矩形周围绘制边框
+            inflated_rect = plane_rect.inflate(2, 2)  # 边框大小为4像素
+            pygame.draw.rect(self.screen, (255, 0, 0), inflated_rect, 2)  # 绘制红色边框
+
 
     def render_building(self, building):
         """
@@ -73,12 +91,19 @@ class GameRender:
         :param turret:
         :return:
         """
-        sprite = turret.get_sprite()
-        pos, dir_v = turret.move(delta_time=delta_time)
+        turret_carriage_sprite, rotated_cannon = turret.get_sprite()
+        pos = turret.get_position()
+        # 首先渲染底座
         plane_rect, should_render = (
-            self.get_object_render_rect(sprite, pos))
+            self.get_object_render_rect(turret_carriage_sprite, pos))
         if should_render:
-            self.screen.blit(sprite, plane_rect)
+            self.screen.blit(turret_carriage_sprite, plane_rect)
+        # 然后渲染上面的内容
+        if rotated_cannon is not None:
+            plane_rect, should_render = (
+                self.get_object_render_rect(rotated_cannon, pos))
+            if should_render:
+                self.screen.blit(rotated_cannon, plane_rect)
 
         if self.draw_collision_box:
             # 创建一个充气的矩形，以便在原始矩形周围绘制边框

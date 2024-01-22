@@ -17,11 +17,11 @@ class Explode(StaticObject):
     def set_explode_sprites(self, explode_sub_textures, explode_sprite):
         self.explode_sub_textures = explode_sub_textures
         self.explode_sprite = explode_sprite
-        sprite = get_rect_sprite(self.explode_sprite, self.explode_sub_textures[0])
+        sprite = get_rect_sprite((self.explode_sub_textures[0], self.explode_sprite))
         self.set_sprite(sprite)
 
     def get_sprite(self):
-        sprite = get_rect_sprite(self.explode_sprite, self.explode_sub_textures[0])
+        sprite = get_rect_sprite((self.explode_sub_textures[0], self.explode_sprite))
         self.set_sprite(sprite)
         return self.image
 
