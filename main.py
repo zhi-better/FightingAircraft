@@ -526,24 +526,24 @@ class FightingAircraftGame:
 
                 # ----------------------------------------------------------------
                 # 防空炮构造
-                new_flak = Flak(render_list=self.list_turrets, list_explodes=self.list_explodes)
-                new_flak.set_map_size(self.map_size)
-                new_flak.set_position(np.array([2200, 2200]))
-                new_flak.target_obj = self.player_plane
-                new_flak.set_turret_sprites(
-                    get_rect_sprite(self.game_resources.get_turret_sprite('turret0')),
-                    get_rect_sprite(self.game_resources.get_building_sprite('flak1', 'body')),
-                    get_rect_sprite(self.game_resources.get_building_sprite('flak1', 'body'))
-                )
-                new_flak.set_bullet_sprite(
-                    get_rect_sprite(self.game_resources.get_bullet_sprite('bullet2')))
-                explode_sub_textures, explode_sprite = self.game_resources.get_explode_animation('explode05')
-                new_flak.explode_sub_textures = explode_sub_textures
-                new_flak.explode_sprite = explode_sprite
-                new_flak.team_number = 2
-                new_flak.all_planes = self.id_plane_mapping.values()
-                self.list_turrets.append(new_flak)
-                self.team2_group.add((new_flak))
+                # new_flak = Flak(render_list=self.list_turrets, list_explodes=self.list_explodes)
+                # new_flak.set_map_size(self.map_size)
+                # new_flak.set_position(np.array([2200, 2200]))
+                # new_flak.target_obj = self.player_plane
+                # new_flak.set_turret_sprites(
+                #     get_rect_sprite(self.game_resources.get_turret_sprite('turret0')),
+                #     get_rect_sprite(self.game_resources.get_building_sprite('flak1', 'body')),
+                #     get_rect_sprite(self.game_resources.get_building_sprite('flak1', 'body'))
+                # )
+                # new_flak.set_bullet_sprite(
+                #     get_rect_sprite(self.game_resources.get_bullet_sprite('bullet2')))
+                # explode_sub_textures, explode_sprite = self.game_resources.get_explode_animation('explode05')
+                # new_flak.explode_sub_textures = explode_sub_textures
+                # new_flak.explode_sprite = explode_sprite
+                # new_flak.team_number = 2
+                # new_flak.all_planes = self.id_plane_mapping.values()
+                # self.list_turrets.append(new_flak)
+                # self.team2_group.add((new_flak))
                 # ---------------------------------------------------------------
                 # 房屋构建
                 new_building = Building(render_list=self.list_buildings, list_explodes=self.list_explodes)

@@ -171,7 +171,7 @@ class DynamicObject(StaticObject):
         # turn
         direction_vector = self._direction_vector
         # print("\rdirection vector: {}".format(direction_vector[0], direction_vector[1]), end='')
-        ang_velocity_tmp = self.angular_velocity * delta_time * 0.08
+        ang_velocity_tmp = self.angular_velocity * delta_time * 0.035
         rotation_matrix = np.array(
             [[np.cos(np.radians(ang_velocity_tmp)), -np.sin(np.radians(ang_velocity_tmp))],
              [np.sin(np.radians(ang_velocity_tmp)), np.cos(np.radians(ang_velocity_tmp))]])
