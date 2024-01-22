@@ -3,6 +3,8 @@ from enum import Enum, IntFlag
 import numpy as np
 import pygame
 from overrides import overrides
+
+from utils.cls_building import Building
 from utils.cls_bullets import *
 from utils.cls_explode import Explode
 from utils.cls_obj import *
@@ -86,12 +88,10 @@ class AirPlaneParams:
         self.secondary_weapon_reload_time = 0.5
 
 
-class AirPlane(DynamicObject):
+class AirPlane(DynamicObject, Building):
     def __init__(self, list_explodes):
-        super().__init__()
-        self.list_explodes = list_explodes
-        self.explode_sub_textures = []
-        self.explode_sprite = None
+        DynamicObject.__init__(self)
+        Building.__init__(self, render_list=None, list_explodes=list_explodes)
         self.plane_type = PlaneType.Simple
         self.image_template = None
         self.air_plane_sprites = AirPlaneSprites()
@@ -107,7 +107,6 @@ class AirPlane(DynamicObject):
         self.input_state = InputState.NoInput
         self.primary_weapon_reload_counter = 0
         self.secondary_weapon_reload_counter = 0
-        self.map_size = np.array([])
         self.bullet_group = pygame.sprite.Group()
 
     def load_sprite(self, img_file_name):
@@ -432,10 +431,15 @@ class AirPlane(DynamicObject):
         死亡前做点事情吧
         :return:
         """
-        # self.explode = Explode(self.list_explodes)
-        # self.explode.set_explode_sprites(
-        #     self.explode_sub_textures, self.explode_sprite)
-        # self.explode.set_position(self.get_position())
+        explode = Explode(self.list_explodes)
+        # 此处对应的 list 给他一个新的 list, 防止影响原有的 list
+        explode.set_explode_sprites(
+            self.explode_sub_textures.copy(), self.explode_sprite)
+        explode.set_map_size(self.get_map_size())
+        explode.set_position(self.get_position())
+
+        # 然后将飞机从对应的渲染链表中移除
+
 
     @abstractmethod
     def primary_weapon_attack(self):
@@ -448,8 +452,8 @@ class AirPlane(DynamicObject):
 
 
 class FighterJet(AirPlane):
-    def __init__(self, list_explodes):
-        super().__init__(list_explodes)
+    def __init__(self,  list_explodes):
+        AirPlane.__init__(self, list_explodes)
         self.plane_type = PlaneType.Fighter
         self.primary_weapon_type = WeaponType.Weapon_None
         self.secondary_weapon_type = WeaponType.Weapon_None
@@ -457,6 +461,7 @@ class FighterJet(AirPlane):
         self.reload_time = 1
 
     def primary_weapon_attack(self):
+
         height_start = self._air_plane_params.plane_height * 0.4
         position_list = [[height_start, self._air_plane_params.plane_height * 0.3],
                          [height_start, self._air_plane_params.plane_height * 0.1],

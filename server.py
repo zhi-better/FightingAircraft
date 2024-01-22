@@ -120,9 +120,11 @@ class FightingAircraftGameServer:
                             {"player_id": player_id,
                              # "position_x": random.random() * 5000,
                              # "position_y": random.random() * 5000,
+                             # 'plane_name': info['plane_name']
                              "position_x": 2000,
                              "position_y": 2000,
-                             'plane_name': info['plane_name']})
+                             'plane_name': info['plane_name']
+                             })
 
                     self.room_info_map[room_number] = {'tcp_list': room_player_tcp_list,
                                                        'sync_time_stamp': 0,

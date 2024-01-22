@@ -11,6 +11,8 @@ class Explode(StaticObject):
         self.list_explodes.append(self)
         self.explode_sub_textures = []
         self.explode_sprite = None
+        self.explode_time_scale = 1
+        self.time_counter = 0
 
     def set_explode_sprites(self, explode_sub_textures, explode_sprite):
         self.explode_sub_textures = explode_sub_textures
@@ -21,15 +23,19 @@ class Explode(StaticObject):
     def get_sprite(self):
         sprite = get_rect_sprite(self.explode_sprite, self.explode_sub_textures[0])
         self.set_sprite(sprite)
-        return self.get_sprite()
+        return self.image
 
     def fixed_update(self, delta_time):
-        self.explode_sub_textures.pop(0)
-        if len(self.explode_sub_textures) == 0:
-            self.on_death()
+        self.time_counter += 1
+        if self.time_counter % self.explode_time_scale == 0:
+            self.time_counter = 0
+            self.explode_sub_textures.pop(0)
+            if len(self.explode_sub_textures) == 0:
+                self.on_death()
 
     def on_death(self):
         self.list_explodes.remove(self)
+        # print('explode death! ')
         self.kill()
 
 

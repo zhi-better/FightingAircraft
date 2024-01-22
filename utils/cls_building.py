@@ -3,15 +3,21 @@ import time
 import numpy as np
 
 from utils.cls_bullets import Bullet
+from utils.cls_explode import Explode
 from utils.cls_obj import *
 
 
-def detect_target_obj(self_position, obj_positions):
+def detect_target_obj(self_position, obj_positions, distance_threshold):
     """
     根据自身位置和物体的位置来寻找到自身的攻击目标
     :param objs:
     :return:
     """
+    distances = np.linalg.norm(
+        obj_positions - np.repeat(self_position, repeats=obj_positions.shape[1], axis=1),
+        axis=0
+    )
+
 
 
 def calculate_lead_target_position(target_relative_position, target_move_direction,
@@ -51,9 +57,11 @@ class Building(StaticObject):
         super().__init__()
         self.list_explodes = list_explodes
         self.render_list = render_list
-        self.durability = 1000  # 建筑的耐久度
+        self.durability = 100  # 建筑的耐久度
         self.body_sprite = None     # 常规的建筑的精灵
         self.ruin_sprite = None     # 被破坏后的建筑的精灵
+        self.explode_sub_textures = None
+        self.explode_sprite = None
 
     def take_damage(self, damage):
         self.durability -= damage
@@ -66,6 +74,13 @@ class Building(StaticObject):
     def on_death(self):
         print('building destroyed!')
         self.set_sprite(self.ruin_sprite)
+
+        explode = Explode(self.list_explodes)
+        # 此处对应的 list 给他一个新的 list, 防止影响原有的 list
+        explode.set_explode_sprites(
+            self.explode_sub_textures.copy(), self.explode_sprite)
+        explode.set_map_size(self.get_map_size())
+        explode.set_position(self.get_position())
 
 
 class Turret(DynamicObject, Building):
@@ -83,6 +98,7 @@ class Turret(DynamicObject, Building):
         self.velocity = 0
         self.angular_speed = 0.5
         self.bullet_velocity = 6  # 因为不能动，所以要设置的大一些
+        self.attack_range = 900
         self.bullet_group = pygame.sprite.Group()
 
     def set_bullet_sprite(self, sprite):
@@ -155,10 +171,10 @@ class Flak(Turret):
             pos_target = self.target_obj.get_position()
             velocity = self.target_obj.velocity
             target_direction_vector = self.target_obj.get_direction_vector()
-            target_vector = pos_target - self.get_position()
+            target_relative_position = pos_target - self.get_position()
             # 旋转炮台瞄准
             lead_target_position = calculate_lead_target_position(
-                target_relative_position=target_vector, target_move_direction=target_direction_vector,
+                target_relative_position=target_relative_position, target_move_direction=target_direction_vector,
                 target_move_velocity=velocity, bullet_move_velocity=self.bullet_velocity
             )
             cross_result = np.cross(self.get_direction_vector().T, lead_target_position.T)
@@ -175,7 +191,8 @@ class Flak(Turret):
 
             # 如果实际炮塔角度和理想角度比较接近的话就可以开火了
             vector_angle_cos = float(np.dot(self.get_direction_vector().T, lead_target_position))
-            if vector_angle_cos > 0.9:
+            # 为了避免防空炮被溜，开火前的倾角满足一定的一致性就可以同步开火了
+            if vector_angle_cos > 0.95:
                 if self.weapon_cool_down_timer > self.round_interval:
                     self.weapon_cool_down_timer = 0
                 # 如果刚好满足发射间隔要求并且未超过发射的最大数量，直接发射
@@ -183,8 +200,15 @@ class Flak(Turret):
                         and self.weapon_cool_down_timer < self.round_shoot_interval * self.round_bullet_count):
                     self.fire(local_position=np.array([30, 0]).reshape((2, 1)))
                     # print('fired!')
-            # else:
-            #     print(vector_angle_cos)
+
+            # 检测目标是否已经从攻击范围中逃脱，如果已经逃脱，那么应该
+            print(f'\r{np.linalg.norm(target_relative_position)}', end='')
+        #     if np.linalg.norm(target_relative_position) > self.attack_range:
+        #         self.target_obj = None
+        # else:
+        #     # 否则就要检测是否有新的目标进入到攻击范围内
+        #     detect_target_obj(self.get_position(), )
+
 
 
 class Tower(StaticObject):

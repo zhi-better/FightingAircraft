@@ -101,7 +101,7 @@ class StaticObject(pygame.sprite.Sprite):
 
     def set_position(self, vector_2d):
         if self._map_size[0] == 0 or self._map_size[1] == 0:
-            Warning('please set map size first!!!')
+            print('please set map size first!!!')
         if self.rect.width == 0 or self.rect.height == 0:
             # Warning('please set sprite size first!!!')
             print('please set sprite size first!!!')
@@ -145,7 +145,7 @@ class StaticObject(pygame.sprite.Sprite):
 
 class DynamicObject(StaticObject):
     def __init__(self):
-        super().__init__()
+        StaticObject.__init__(self)
         self._direction_vector = np.array([1, 0]).reshape((2, 1))
         self.speed = 0.0
         self.velocity = 0

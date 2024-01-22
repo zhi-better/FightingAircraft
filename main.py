@@ -469,8 +469,8 @@ class FightingAircraftGame:
         data = {
             "command": CommandType.cmd_login.value,
             "player_id": self.player_id,
-            "plane_name": random.choice(list(self.game_resources.airplane_info_map.keys()))
-            # "plane_name": 'P40'
+            # "plane_name": random.choice(list(self.game_resources.airplane_info_map.keys()))
+            "plane_name": 'Bf110'
         }
         # random.choice(list(self.game_resources.airplane_info_map.keys()))
         self.client.send(json.dumps(data), pack_data=True, data_type=DataType.TypeString)
@@ -544,6 +544,9 @@ class FightingAircraftGame:
                 new_building.ruin_sprite = get_rect_sprite(rect, sprite)
                 new_building.set_sprite(new_building.body_sprite)
                 new_building.set_position(np.array([2500, 2200]))
+                explode_sub_textures, explode_sprite = self.game_resources.get_explode_animation()
+                new_building.explode_sub_textures = explode_sub_textures
+                new_building.explode_sprite = explode_sprite
                 new_building.team_number = 2
                 self.list_buildings.append(new_building)
                 self.team2_group.add((new_building))
@@ -649,27 +652,6 @@ class FightingAircraftGame:
         if plane.team_number == 1:
             crashed = pygame.sprite.groupcollide(
                 plane.bullet_group, self.team2_group, False, False)
-        elif plane.team_number == 2:
-            crashed = pygame.sprite.groupcollide(
-                plane.bullet_group, self.team1_group, False, False)
-        else:
-            print('unknown team_number: {}'.format(plane.team_number))
-        return crashed
-
-    def update_plane_physics(self, delta_time):
-        """
-        更新飞机的物理状态
-        """
-        for plane in self.id_plane_mapping.values():
-            plane.fixed_update(delta_time=delta_time)
-            if self.is_use_logger:
-                self.logger.debug(
-                    json.dumps({'physic_frame': self.local_physic_time_stamp, 'input': plane.input_state,
-                                'id': plane.get_air_plane_params().id}))
-            for bullet in plane.bullet_group:
-                bullet.fixed_update(delta_time=delta_time)
-            # 碰撞检测
-            crashed = self.check_bullet_collision(plane)
             if crashed:
                 for bullet in crashed:
                     # --------------------------------
@@ -680,35 +662,57 @@ class FightingAircraftGame:
                         if bullet.explode(sprite):
                             print('enemy eliminated. ')
                             sprite.on_death()
-                            # 从碰撞检测中移除该目标
-                            if sprite.team_number == 1:
-                                self.team2_group.remove(sprite)
-                            else:
-                                self.team1_group.remove(sprite)
-                        # print('attack it!')
+                            self.team2_group.remove(sprite)
+        elif plane.team_number == 2:
+            crashed = pygame.sprite.groupcollide(
+                plane.bullet_group, self.team1_group, False, False)
+            if crashed:
+                for bullet in crashed:
+                    # --------------------------------
+                    # 首先利用精确检测看两者是否真正相交
+                    if pygame.sprite.collide_mask(bullet, crashed[bullet][0]) is not None:
+                        # 然后尝试给飞机对应的伤害
+                        sprite = crashed[bullet][0]
+                        if bullet.explode(sprite):
+                            print('enemy eliminated. ')
+                            sprite.on_death()
+            self.team2_group.remove(sprite)
+        else:
+            print('unknown team_number: {}'.format(plane.team_number))
+        # return crashed
 
-                    # else:
-                    #     print('not really crashed!')
+    def update_plane_physics(self, delta_time):
+        """
+        更新飞机的物理状态
+        """
+        # ----------------------------------------------------------------
+        # 飞机飞行状态的更新
+        for plane in self.id_plane_mapping.values():
+            plane.fixed_update(delta_time=delta_time)
+            if self.is_use_logger:
+                self.logger.debug(
+                    json.dumps({'physic_frame': self.local_physic_time_stamp, 'input': plane.input_state,
+                                'id': plane.get_air_plane_params().id}))
+            for bullet in plane.bullet_group:
+                bullet.fixed_update(delta_time=delta_time)
+                # ----------------------------------------------------------------
+            # 碰撞检测
+            self.check_bullet_collision(plane)
 
-            # 进行防空炮的更新
-            for turret in self.list_turrets:
-                turret.fixed_update(delta_time=delta_time)
-                for bullet in turret.bullet_group:
-                    bullet.fixed_update(delta_time=delta_time)
-                # 碰撞检测
-                crashed = self.check_bullet_collision(turret)
-                if crashed:
-                    for bullet in crashed:
-                        # --------------------------------
-                        # 首先利用精确检测看两者是否真正相交
-                        if pygame.sprite.collide_mask(bullet, crashed[bullet][0]) is not None:
-                            # 然后尝试给飞机对应的伤害
-                            if bullet.explode(crashed[bullet][0]):
-                                print('enemy eliminated. ')
-                            # print('attack it!')
-                            plane.bullet_group.remove(bullet)
-                        # else:
-                        #     print('not really crashed!')
+        # ----------------------------------------------------------------
+        # 防空炮姿态更新
+        for turret in self.list_turrets:
+            turret.fixed_update(delta_time=delta_time)
+            for bullet in turret.bullet_group:
+                bullet.fixed_update(delta_time=delta_time)
+            # 碰撞检测
+            self.check_bullet_collision(turret)
+
+        # ----------------------------------------------------------------
+        # 爆炸效果的更新
+        for explode in self.list_explodes:
+            explode.fixed_update(delta_time=delta_time)
+
 
     def fixed_update(self):
         """
