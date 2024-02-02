@@ -149,7 +149,6 @@ class FightingAircraftGameServer:
                             pack_data=True,
                             data_type=DataType.TypeString)
 
-
             elif cmd == CommandType.cmd_player_action:
                 player_id = data['player_id']
                 room_number = self.player_id_2_player_info[player_id]['room_number']

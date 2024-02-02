@@ -63,19 +63,17 @@ def get_rect_sprite(params):
 
 
 class StaticObject(pygame.sprite.Sprite):
-    def __init__(self):
+    def __init__(self, team_number, game_data):
         # 调用父类的初始化方法
         super().__init__()
+        self.game_data = game_data
         self.mask = None
         self._position = np.zeros((2,))
         self.rect = pygame.Rect(0, 0, 0, 0)
         self.image = None
         self.collision_box = None
-        self.team_number = 0
+        self.team_number = team_number
         self._map_size = np.array([0, 0])
-
-        self.render_list_parent = []    # 表示渲染时的父链表
-        self.physic_list_parent = []    # 表示进行碰撞检测时的父链表
 
     def set_map_size(self, map_size):
         self._map_size = map_size
@@ -145,8 +143,8 @@ class StaticObject(pygame.sprite.Sprite):
 
 
 class DynamicObject(StaticObject):
-    def __init__(self):
-        StaticObject.__init__(self)
+    def __init__(self, team_number, game_data):
+        StaticObject.__init__(self, team_number, game_data)
         self._direction_vector = np.array([1, 0]).reshape((2, 1))
         self.speed = 0.0
         self.velocity = 0

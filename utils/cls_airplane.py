@@ -60,6 +60,23 @@ class WeaponType(Enum):
     SD_4_x = 16         # SD4穿甲炸弹
     TOR_2x = 15         # 鱼雷*2
 
+def detect_airplane_target_obj(airplane_obj, target_objs, distance_threshold, angle_threshold):
+    """
+    根据自身位置和物体的位置来寻找到自身的攻击目标
+    :param objs:
+    :return:
+    """
+    for target_obj in target_objs:
+        if target_obj.team_number != airplane_obj.team_number:
+            distances = np.linalg.norm(target_obj.get_position() - airplane_obj.get_position())
+            if distances < distance_threshold:
+                # 判断角度是否达到了要求
+                # ...
+
+                return target_obj
+
+    return None
+
 
 class AirPlaneSprites:
     def __init__(self):
@@ -89,16 +106,16 @@ class AirPlaneParams:
 
 
 class AirPlane(DynamicObject, Building):
-    def __init__(self, list_explodes):
-        DynamicObject.__init__(self)
-        Building.__init__(self, render_list=None, list_explodes=list_explodes)
+    def __init__(self, team_number, game_data):
+        DynamicObject.__init__(self, team_number, game_data)
+        Building.__init__(self, team_number, game_data)
         self.plane_type = PlaneType.Simple
         self.image_template = None
         self.air_plane_sprites = AirPlaneSprites()
         self._air_plane_params = AirPlaneParams()
         self._velocity_modulation_factor = 0
         self._engine_temperature = 0
-        self.heat_counter = 60
+        self.heat_counter = 60          # 表示引擎过热后经过多久后会开始自动降温
         self.roll_attitude = 0.0
         self.pitch_attitude = 0.0
         self.input_state = InputState.NoInput
@@ -139,10 +156,16 @@ class AirPlane(DynamicObject, Building):
         self.image = get_rect_sprite((rect_dic, self.image_template))
         self.image = pygame.transform.rotate(
             self.image, vector_2_angle(self.get_direction_vector()))
-        rect = self.image.get_rect()
-        self.rect.width = rect.width
-        self.rect.height = rect.height
-        self.mask = pygame.mask.from_surface(self.image)
+        # 在飞行姿势大于30度的时候不可被击中
+        if 0 <= self.pitch_attitude <= 3 or 33 <= self.pitch_attitude <= 36:
+            rect = self.image.get_rect()
+            self.rect.width = rect.width
+            self.rect.height = rect.height
+            self.mask = pygame.mask.from_surface(self.image)
+        else:
+            # 此处设置为 1 主要为了和没设置时的 0 区分
+            self.rect.width = 1
+            self.rect.height = 1
         return self.image
 
 
@@ -154,11 +177,8 @@ class AirPlane(DynamicObject, Building):
         """
         self.speed = speed
         self.velocity = speed
-        self.max_speed = self.speed * 1.5
-        self.min_speed = self.speed * 0.7
 
     def update_roll_attitude(self, target_roll_attitude):
-
         if self.timer_counter % 2 == 0 and self.pitch_attitude == 0:
             self.timer_counter = 0
             if np.abs(self.roll_attitude - target_roll_attitude) <= 1:
@@ -178,7 +198,17 @@ class AirPlane(DynamicObject, Building):
                 self.roll_attitude += 36
 
     def update_pitch_attitude(self, target_pitch_attitude):
-        if self.timer_counter % 2 == 0 and self.roll_attitude == 0:
+        """
+        更新对应的pitch姿态
+        :param target_pitch_attitude:
+        :return:
+        """
+        '''
+        此处的逻辑内容：
+        1. 当pitch上拉的时候整体的速度会降低，当pitch下拉的时候整体的速度会增加
+        2. 当pitch接近9的时候应该直接以9进行旋转，此时的旋转速度由于角度不同应该要小于急转时刻的转弯半径
+        '''
+        if self.timer_counter % 3 == 0 and self.roll_attitude == 0:
             self.timer_counter = 0
             if self.switch_direction:
                 target_pitch_attitude = 18
@@ -197,7 +227,7 @@ class AirPlane(DynamicObject, Building):
                 self.pitch_attitude -= 36
             elif self.pitch_attitude < 0:
                 self.pitch_attitude += 36
-
+            # 控制战机转向
             if self.pitch_attitude == 9:
                 self.switch_direction = True
             elif self.pitch_attitude == 18:
@@ -264,29 +294,23 @@ class AirPlane(DynamicObject, Building):
         # ---------------------------------------------
         # 加减速
         if self.input_state & InputState.SpeedUp:
-            self._air_plane_params.engine_heat_rate += 0.3
-            self.heat_counter = 0
-            self._velocity_modulation_factor += 0.5
-        elif self.input_state & InputState.SlowDown:
-            self._velocity_modulation_factor -= 0.3
-        if self._velocity_modulation_factor > 0:
-            if self._engine_temperature >= 100:
-                # 增益直接降为 -0.5
-                self._velocity_modulation_factor = -0.5
+            if self._engine_temperature < 100:
+                self._air_plane_params.engine_heat_rate += 0.3
                 # 速度插值，为了恢复常规的运行速度
-                self.velocity = np.maximum(self.velocity + self._velocity_modulation_factor, self.speed)
+                self.velocity = np.minimum(self.velocity + 0.07, self.speed * 1.5)
             else:
-                self.velocity = np.minimum(self.velocity + self._velocity_modulation_factor, self.max_speed)
-        elif self._velocity_modulation_factor < 0:
-            self.velocity = np.maximum(self.velocity + self._velocity_modulation_factor, self.min_speed)
+                # 速度插值，为了恢复常规的运行速度
+                self.velocity += np.sign(self.speed - self.velocity) * 0.03
+                if np.abs(self.velocity - self.speed) < 0.2:
+                    self.velocity = self.speed
+                self.heat_counter = 0
+        elif self.input_state & InputState.SlowDown:
+            self.velocity = np.maximum(self.velocity - 0.3, self.speed * 0.7)
         else:
             # 速度插值，为了恢复常规的运行速度
-            self.velocity += np.sign(self.speed - self.velocity) * 0.1
+            self.velocity += np.sign(self.speed - self.velocity) * 0.03
             if np.abs(self.velocity - self.speed) < 0.2:
                 self.velocity = self.speed
-        self._velocity_modulation_factor = 0
-        # print('\rthe real speed is: {:.2f}, engine temperature is: {}'.format(
-        #     self.velocity, self._engine_temperature), end='')
 
         # ---------------------------------------------
         # 发动机温度
@@ -351,13 +375,14 @@ class AirPlane(DynamicObject, Building):
         if health <= 0:
             health = 1000
             self._air_plane_params.health_points = health
+            self.create_explode()
             return True
         else:
             return False
 
     def create_bullet(self, bullet_sprite, local_position, direction):
         # direction = np.array([-direction[1], direction[0]])
-        new_bullet = Bullet()
+        new_bullet = Bullet(self.team_number, self.game_data)
         new_bullet.set_map_size(self.get_map_size())
         new_bullet.set_sprite(pygame.transform.rotate(
             bullet_sprite, vector_2_angle(self.get_direction_vector())))
@@ -372,7 +397,7 @@ class AirPlane(DynamicObject, Building):
 
     def create_bomb(self, bomb_sprite, local_position, direction):
         # direction = np.array([-direction[1], direction[0]])
-        new_bullet = Bullet()
+        new_bullet = Bullet(self.team_number, self.game_data)
         new_bullet.set_map_size(self.get_map_size())
         new_bullet.set_sprite(pygame.transform.rotate(
             bomb_sprite, vector_2_angle(self.get_direction_vector())))
@@ -384,12 +409,29 @@ class AirPlane(DynamicObject, Building):
         new_bullet._damage = 10
         self.bullet_group.add(new_bullet)
 
+    def create_AAM(self, aam_sprite, local_position, direction, target):
+        # direction = np.array([-direction[1], direction[0]])
+        new_aam = AAM(self.team_number, self.game_data)
+        new_aam.set_map_size(self.get_map_size())
+        new_aam.set_sprite(pygame.transform.rotate(
+            aam_sprite, vector_2_angle(self.get_direction_vector())))
+        local_position[1] = np.cos(np.radians(self.roll_attitude * 10)) * local_position[1]
+        new_aam.set_position(local_to_world(
+            self.get_position(), direction, local_point=local_position))
+        new_aam.set_speed(self.velocity + 2)
+        new_aam.angular_speed = 2.5
+        new_aam.set_direction_vector(direction)
+        new_aam._damage = 300
+        new_aam.target_object = target
+        new_aam.parent = self
+        self.bullet_group.add(new_aam)
+
     def on_death(self):
         """
         死亡前做点事情吧
         :return:
         """
-        explode = Explode(self.list_explodes)
+        explode = Explode(self.game_data)
         # 此处对应的 list 给他一个新的 list, 防止影响原有的 list
         explode.set_explode_sprites(
             self.explode_sub_textures.copy(), self.explode_sprite)
@@ -410,26 +452,45 @@ class AirPlane(DynamicObject, Building):
 
 
 class FighterJet(AirPlane):
-    def __init__(self,  list_explodes):
-        AirPlane.__init__(self, list_explodes)
+    def __init__(self, team_number, game_data):
+        AirPlane.__init__(self, team_number, game_data)
         self.plane_type = PlaneType.Fighter
         self.primary_weapon_type = WeaponType.Weapon_None
         self.secondary_weapon_type = WeaponType.Weapon_None
         self.reload_counter = 0
-        self.reload_time = 1
+        self.reload_time = 20
 
     def primary_weapon_attack(self):
-
-        height_start = self._air_plane_params.plane_height * 0.4
-        position_list = [[height_start, self._air_plane_params.plane_height * 0.3],
-                         [height_start, self._air_plane_params.plane_height * 0.1],
-                         [height_start, -self._air_plane_params.plane_height * 0.1],
-                         [height_start, -self._air_plane_params.plane_height * 0.3]]
-
-        for pos in position_list:
-            self.create_bullet(
-                self.air_plane_sprites.primary_bullet_sprite, np.array(pos),
-                self.get_direction_vector())
+        if self.team_number == 1:
+            target_team_number = 2
+        elif self.team_number == 2:
+            target_team_number = 1
+        else:
+            print('wrong team number')
+            return
+        # 获取到敌人的飞机坐标
+        target = detect_airplane_target_obj(
+            self, self.game_data.get_team_airplanes(target_team_number),
+            1000, 30)
+        if target is not None:
+            self.create_AAM(
+                self.air_plane_sprites.primary_bullet_sprite,
+                np.array([self._air_plane_params.plane_height * 0.4, 0]),
+                self.get_direction_vector(),
+                target
+            )
+        else:
+            print('no valid target! ')
+        # height_start = self._air_plane_params.plane_height * 0.4
+        # position_list = [[height_start, self._air_plane_params.plane_height * 0.3],
+        #                  [height_start, self._air_plane_params.plane_height * 0.1],
+        #                  [height_start, -self._air_plane_params.plane_height * 0.1],
+        #                  [height_start, -self._air_plane_params.plane_height * 0.3]]
+        #
+        # for pos in position_list:
+        #     self.create_bullet(
+        #         self.air_plane_sprites.primary_bullet_sprite, np.array(pos),
+        #         self.get_direction_vector())
 
     def secondary_weapon_attack(self):
         position_list = [[self._air_plane_params.plane_height * 0.4, 0]]
@@ -440,8 +501,8 @@ class FighterJet(AirPlane):
 
 
 class AttackAircraft(AirPlane):
-    def __init__(self, list_explodes):
-        super().__init__(list_explodes)
+    def __init__(self, team_number, game_data):
+        super().__init__(team_number, game_data)
         self.plane_type = PlaneType.AttackAircraft
 
     def primary_weapon_attack(self):
@@ -452,8 +513,8 @@ class AttackAircraft(AirPlane):
 
 
 class Bomber(AirPlane):
-    def __init__(self, list_explodes):
-        super().__init__(list_explodes)
+    def __init__(self, team_number, game_data):
+        super().__init__(team_number, game_data)
         self.plane_type = PlaneType.Bomber
         self.primary_weapon_type = WeaponType.Weapon_None
         self.secondary_weapon_type = WeaponType.Weapon_None

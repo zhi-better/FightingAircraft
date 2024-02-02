@@ -7,7 +7,7 @@ from utils.cls_explode import Explode
 from utils.cls_obj import *
 
 
-def detect_target_obj(turret_obj, target_objs, distance_threshold):
+def detect_turret_target_obj(turret_obj, target_objs, distance_threshold):
     """
     根据自身位置和物体的位置来寻找到自身的攻击目标
     :param objs:
@@ -56,10 +56,8 @@ class Building(StaticObject):
     """
     普通建筑
     """
-    def __init__(self, render_list, list_explodes):
-        super().__init__()
-        self.list_explodes = list_explodes
-        self.render_list = render_list
+    def __init__(self, team_number, game_data):
+        super().__init__(team_number, game_data)
         self.durability = 100  # 建筑的耐久度
         self.body_sprite = None     # 常规的建筑的精灵
         self.ruin_sprite = None     # 被破坏后的建筑的精灵
@@ -75,7 +73,7 @@ class Building(StaticObject):
             return False
 
     def create_explode(self):
-        explode = Explode(self.list_explodes)
+        explode = Explode(self.game_data)
         # 此处对应的 list 给他一个新的 list, 防止影响原有的 list
         explode.set_explode_sprites(
             self.explode_sub_textures.copy(), self.explode_sprite)
@@ -93,9 +91,9 @@ class Turret(DynamicObject, Building):
     """
     炮台的基类，主要用于控制发射子弹等操作
     """
-    def __init__(self, render_list, list_explodes):
-        Building.__init__(self, render_list, list_explodes)
-        DynamicObject.__init__(self)
+    def __init__(self, team_number, game_data):
+        Building.__init__(self, team_number, game_data)
+        DynamicObject.__init__(self, team_number, team_number)
         self.bullet_sprite = None
         self.cannon_sprite = None   # 炮管的精灵
         self._bullet_damage = 10
@@ -103,10 +101,10 @@ class Turret(DynamicObject, Building):
         #  炮塔不能动，但是可以旋转，哈哈哈哈哈哈笑死
         self.speed = 0
         self.velocity = 0
-        self.angular_speed = 0.7
+        self.angular_speed = 2
         self.bullet_velocity = 6    # 因为不能动，所以要设置的大一些
         self.attack_range = 1000     # 攻击范围要大于视野范围
-        self.view_range = 600       # 视野范围，主要用于检测攻击敌机
+        self.view_range = 800       # 视野范围，主要用于检测攻击敌机
         self.bullet_group = pygame.sprite.Group()
         self.all_planes = []
 
@@ -156,7 +154,7 @@ class Turret(DynamicObject, Building):
         :return: 返回创建的子弹
         """
         # direction = np.array([-direction[1], direction[0]])
-        new_bullet = Bullet()
+        new_bullet = Bullet(self.team_number, self.game_data)
         new_bullet.set_map_size(self.get_map_size())
         new_bullet.set_sprite(pygame.transform.rotate(self.bullet_sprite, vector_2_angle(self._direction_vector)))
         new_bullet.set_position(local_to_world(
@@ -181,8 +179,8 @@ class Flak(Turret):
         super().__init__(render_list, list_explodes)
         self.target_obj = None  # 表示攻击的目标
         self.round_bullet_count = 5  # 每轮发射子弹时候的子弹数量
-        self.round_shoot_interval = 3  # 每轮设计过程中子弹发射间隔
-        self.round_interval = 50  # 每轮发射之间的时间间隔
+        self.round_shoot_interval = 2  # 每轮设计过程中子弹发射间隔
+        self.round_interval = 30  # 每轮发射之间的时间间隔
         self.weapon_cool_down_timer = 0  # 辅助判断发射冷却时间的计数器
 
     def fixed_update(self, delta_time):
@@ -240,7 +238,7 @@ class Flak(Turret):
                     self.target_obj = None
             else:
                 # 否则就要检测是否有新的目标进入到攻击范围内
-                self.target_obj = detect_target_obj(self, self.all_planes, self.view_range)
+                self.target_obj = detect_turret_target_obj(self, self.all_planes, self.view_range)
 
 
 

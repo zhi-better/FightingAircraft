@@ -5,10 +5,9 @@ class Explode(StaticObject):
     """
     爆炸的 class, 用法为在飞机死亡后在死亡的地点创建一个爆炸，爆炸完毕后自动死去
     """
-    def __init__(self, list_explodes):
-        super().__init__()
-        self.list_explodes = list_explodes
-        self.list_explodes.append(self)
+    def __init__(self, game_data):
+        super().__init__(team_number=0, game_data=game_data)
+        self.game_data.list_explodes.append(self)
         self.explode_sub_textures = []
         self.explode_sprite = None
         self.explode_time_scale = 1
@@ -34,7 +33,7 @@ class Explode(StaticObject):
                 self.on_death()
 
     def on_death(self):
-        self.list_explodes.remove(self)
+        self.game_data.list_explodes.remove(self)
         # print('explode death! ')
         self.kill()
 
