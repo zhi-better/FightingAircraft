@@ -127,6 +127,16 @@ class GameRender:
             inflated_rect = plane_rect.inflate(2, 2)  # 边框大小为4像素
             pygame.draw.rect(self.screen, (255, 0, 0), inflated_rect, 2)  # 绘制红色边框
 
+    def render_box(self, target):
+        sprite = target.get_sprite()
+        pos = target.get_position()
+        plane_rect, should_render = (
+            self.get_object_render_rect(sprite, pos))
+        if should_render:
+            # 创建一个充气的矩形，以便在原始矩形周围绘制边框
+            inflated_rect = plane_rect.inflate(2, 2)  # 边框大小为4像素
+            pygame.draw.rect(self.screen, (255, 0, 0), inflated_rect, 2)  # 绘制红色边框
+
     def render_plane(self, plane, team_id, delta_time):
         """
         渲染飞机，实现不同角度射击
@@ -147,8 +157,10 @@ class GameRender:
             if self.font is None:
                 self.font = pygame.font.Font(None, 24)  # 使用默认字体，大小36
             # 在飞机上方显示生命值文本
+            # text = f'Health: {plane._air_plane_params.health_points}, pos_x: {np.round(pos[0], decimals=2)}, pos_y: {np.round(pos[1], decimals=2)}'
+            text = f'Health: {plane.durability}'
             text_surface = self.font.render(
-                f'Health: {plane._air_plane_params.health_points}, pos_x: {np.round(pos[0], decimals=2)}, pos_y: {np.round(pos[1], decimals=2)}',
+                text,
                 True, font_color)  # 黑色文本
             text_rect = text_surface.get_rect(
                 center=(plane_rect.centerx, plane_rect.centery - 0.6 * plane_rect.height))  # 设置文本位置

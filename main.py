@@ -68,6 +68,295 @@ def setup_logging(log_file_path):
     return logger
 
 
+class GameResources:
+    def __init__(self):
+        self.cross_hair_image = None
+        self.airplane_info_map = {}
+        self.maps_map = {}
+        self.explode_sub_textures = {}
+        self.explode_sprite = None
+        self.temporary_sub_textures = {}
+        self.temporary_sprite = None
+        self.thumbnail_map_sprite = None
+        self.cross_hair_sprite = None
+
+        self.load_all()
+
+    def load_all(self):
+        self.load_explode()
+        self.load_temporary()
+        self.load_all_plane_parameters()
+        self.load_all_maps()
+
+        original_cross_hair_sprite = pygame.image.load('guideDest.png')
+        # 进行2倍缩放
+        scale = 0.1
+        self.cross_hair_sprite = pygame.transform.scale(
+            original_cross_hair_sprite,
+            (original_cross_hair_sprite.get_width() * scale, original_cross_hair_sprite.get_height() * scale))
+
+
+    def load_temporary(self):
+        """
+        加载一个组合的2d精灵文件并按照分类将对应的内容提取出来
+        :return:
+        """
+        # 解析XML文件
+        tree = ET.parse('temporary.xml')
+        root = tree.getroot()
+        # sub_textures = {}
+
+        # 遍历子元素
+        for sub_texture in root.findall(".//SubTexture"):
+            parts = sub_texture.get("name").split('/')
+            type_name = parts[0]
+
+            # 根据名字的不同将内容归类
+            if len(parts) == 1:  # 炸弹
+                self.temporary_sub_textures[type_name] = {'x': int(sub_texture.get("x")),
+                                                          'y': int(sub_texture.get('y')),
+                                                          'width': int(sub_texture.get('width')),
+                                                          'height': int(sub_texture.get('height'))}
+            else:  # 建筑
+                if type_name not in self.temporary_sub_textures:
+                    self.temporary_sub_textures[type_name] = {}
+
+                self.temporary_sub_textures[type_name][parts[1]] = {'x': int(sub_texture.get("x")),
+                                                                    'y': int(sub_texture.get('y')),
+                                                                    'width': int(sub_texture.get('width')),
+                                                                    'height': int(sub_texture.get('height'))}
+
+        self.temporary_sprite = pygame.image.load('temporary.png')
+
+    def load_explode(self):
+        # 解析XML文件
+        tree = ET.parse('explode.xml')
+        root = tree.getroot()
+
+        # 遍历子元素
+        name = 'cloud1'
+        explode_list = []
+        for sub_texture in root.findall(".//SubTexture"):
+            parts = sub_texture.get("name").split('/')
+            type_name = parts[0]
+            if name != type_name:
+                self.explode_sub_textures[name] = explode_list.copy()
+                explode_list.clear()
+                name = type_name
+
+            explode_list.append({'x': int(sub_texture.get("x")),
+                                 'y': int(sub_texture.get('y')),
+                                 'width': int(sub_texture.get('width')),
+                                 'height': int(sub_texture.get('height'))})
+        # 最后一个补上
+        self.explode_sub_textures[name] = explode_list
+        self.explode_sprite = pygame.image.load('explode.png')
+
+    def load_all_plane_parameters(self):
+        # 解析XML文件
+        tree = ET.parse('parameters.xml')
+        root = tree.getroot()
+
+        # 遍历子元素
+        for sub_texture in root.findall(".//SubTexture"):
+            airplane_name = sub_texture.get("name")
+            lifevalue = int(sub_texture.get("lifevalue"))
+            speed = float(sub_texture.get("speed"))
+            mainweapon = int(sub_texture.get("mainweapon"))
+            secondweapon = int(sub_texture.get("secondweapon"))
+            attackpower = int(sub_texture.get("attackpower"))
+            turnspeed = float(sub_texture.get("turnspeed"))
+            reloadtime = int(sub_texture.get("reloadtime"))
+            ammo = int(sub_texture.get("ammo"))
+
+            '''
+            speed=2 => 510km/h
+            turnSpeed=3 => 385m
+            '''
+            # 将飞机信息存储到映射中
+            self.airplane_info_map[airplane_name] = {
+                "lifevalue": lifevalue,
+                "speed": speed,
+                "mainweapon": mainweapon,
+                "secondweapon": secondweapon,
+                "attackpower": attackpower,
+                "turnspeed": turnspeed,
+                "reloadtime": reloadtime,
+                "ammo": ammo
+            }
+
+        return self.airplane_info_map
+
+    def load_all_maps(self):
+        # 首先加载都有哪些地图
+        num_xml_file = 0
+        for file in os.listdir('map'):
+            if file.endswith(".xml"):
+                self.maps_map[num_xml_file] = os.path.join('map', file)
+                num_xml_file += 1
+
+    def get_map(self, map_index=0):
+        file_name = self.maps_map[map_index]
+        # 寻找最后一个点的位置，表示扩展名的开始
+        last_dot_index = file_name.rfind('.')
+        scale_factor = 0.6
+        # 如果找到点，并且点不在字符串的开头或结尾
+        if last_dot_index != -1 and last_dot_index < len(file_name) - 1:
+            # 获取扩展名前的部分
+            file_base_name = file_name[:last_dot_index]
+            # 将扩展名更改为 .png
+            file_name_with_png = file_base_name + '.png'
+            original_image = pygame.image.load(file_name_with_png)
+            # 获取原始图像的宽度和高度
+            original_width, original_height = original_image.get_size()
+            # 计算缩放后的宽度和高度
+            scaled_width = int(original_width * scale_factor)
+            scaled_height = int(original_height * scale_factor)
+            # 使用 pygame.transform.scale 缩放图像
+            self.thumbnail_map_sprite = pygame.transform.scale(original_image, (scaled_width, scaled_height))
+
+        return self.maps_map[map_index], self.thumbnail_map_sprite
+
+    def get_bullet_sprite(self, bullet_key='bullet1'):
+        """
+        加载子弹的精灵，参数为子弹的键
+        :param bullet_key: bullet1 - bullet6, bomb1 - bomb5
+        :return:
+        """
+
+        return self.temporary_sub_textures[bullet_key], self.temporary_sprite
+
+    def get_turret_sprite(self, bullet_key='turret'):
+        """
+        加载炮管的精灵，参数为子弹的键
+        :param bullet_key: turret -> turret0 -> turret4
+        :return:
+        """
+
+        return self.temporary_sub_textures[bullet_key], self.temporary_sprite
+
+    def get_building_sprite(self, building_key, state='body'):
+        """
+        加载建筑的精灵
+        :param building_key:
+        building01-building15, flak1-flak2, tank1-tank3, tower2-tower3, truck1-truck2
+        :param state: body or ruins
+        :return:
+        """
+
+        return self.temporary_sub_textures[building_key][state], self.temporary_sprite
+
+    def get_explode_animation(self, explode_key='explode01'):
+        """
+        获取爆炸的图像链表和精灵
+        :param explode_key: explode01 - explode12
+        :return:
+        """
+        return self.explode_sub_textures[explode_key], self.explode_sprite
+
+    def get_fire_animation(self, fire_key):
+        """
+        获取开火的动画和对应的精灵链表
+        :param fire_key: fire1 - fire3
+        :return:
+        """
+        return self.explode_sub_textures[fire_key], self.explode_sprite
+
+    def load_plane_sprites(self, file_path):
+        # 解析XML文件
+        tree = ET.parse(file_path)
+        root = tree.getroot()
+
+        # 获取图片路径
+        image_path = root.attrib.get('imagePath')
+
+        # 初始化滚转和俯仰的映射字典
+        roll_mapping = {}
+        pitch_mapping = {}
+
+        # 遍历SubTexture元素
+        for sub_texture in root.findall('SubTexture'):
+            name = sub_texture.attrib.get('name')
+            x = int(sub_texture.attrib.get('x'))
+            y = int(sub_texture.attrib.get('y'))
+            width = int(sub_texture.attrib.get('width'))
+            height = int(sub_texture.attrib.get('height'))
+
+            # 判断是滚转还是俯仰
+            parts = name.split('/')
+            if parts[2].find('roll') != -1:
+                roll_mapping[int(parts[2][4:])] = {'x': x, 'y': y, 'width': width, 'height': height}
+            elif parts[2].find('pitch') != -1:
+                pitch_mapping[int(parts[2][5:])] = {'x': x, 'y': y, 'width': width, 'height': height}
+
+        # 返回图片路径和映射字典
+        return 'objects/' + image_path, roll_mapping, pitch_mapping
+
+    def get_plane(self, plane_name, team_number, game_data):
+        param = self.airplane_info_map[plane_name]
+        image_path, roll_mapping, pitch_mapping = self.load_plane_sprites(
+            'objects/{}.xml'.format(plane_name))
+
+        # 读取JSON文件
+        with open('parameters.json', 'r') as file:
+            data = json.load(file)
+
+        plane_type = PlaneType(data['planes'][plane_name]['type'])
+        if plane_type == PlaneType.Fighter:
+            plane = FighterJet(team_number, game_data)
+        elif plane_type == PlaneType.AttackAircraft:
+            plane = AttackAircraft(team_number, game_data)
+        elif plane_type == PlaneType.Bomber:
+            plane = Bomber(team_number, game_data)
+        else:
+            plane = Bomber(team_number, game_data)
+
+        plane.set_speed(param['speed'])
+        plane.angular_speed = param['turnspeed']
+        plane.health_points = param['lifevalue']
+        params = plane.get_air_plane_params()
+        params.name = plane_name
+        params.primary_weapon_reload_time = 0.2
+        params.secondary_weapon_reload_time = 0.1
+        params.plane_width = roll_mapping[0]['width']
+        params.plane_height = roll_mapping[0]['height']
+        plane.set_air_plane_params(params)
+        # plane.air_plane_params.primary_weapon_reload_time = 0
+        # plane.air_plane_params.secondary_weapon_reload_time = 0
+        plane.load_sprite('objects/{}.png'.format(plane_name))
+        plane.air_plane_sprites.roll_mapping = roll_mapping
+        plane.air_plane_sprites.pitch_mapping = pitch_mapping
+        # 设置主武器和副武器的贴图资源
+        plane.air_plane_sprites.primary_bullet_sprite = get_rect_sprite(
+            self.get_bullet_sprite('bomb' + str(param['mainweapon'] + 1)))
+        # 注意此处获取的 sprite 应该旋转 90 度
+        plane.air_plane_sprites.secondary_bullet_sprite = get_rect_sprite(
+            self.get_bullet_sprite('bullet' + str(param['secondweapon'])))
+
+        explode_sub_textures, explode_sprite = self.get_explode_animation()
+        plane.explode_sub_textures = explode_sub_textures
+        plane.explode_sprite = explode_sprite
+        # 刷新一下对应的 sprite, 防止出 bug
+        plane.get_sprite()
+
+        return plane
+
+    def get_flak(self, team_number, game_data):
+        new_flak = Flak(team_number, game_data)
+
+        new_flak.set_turret_sprites(
+            get_rect_sprite(self.get_turret_sprite('turret0')),
+            get_rect_sprite(self.get_building_sprite('flak1', 'body')),
+            get_rect_sprite(self.get_building_sprite('flak1', 'body'))
+        )
+        new_flak.set_bullet_sprite(
+            get_rect_sprite(self.get_bullet_sprite('bullet2')))
+        explode_sub_textures, explode_sprite = self.get_explode_animation('explode05')
+        new_flak.explode_sub_textures = explode_sub_textures
+        new_flak.explode_sprite = explode_sprite
+
+        return new_flak
+
 class FightingAircraftGame:
     def __init__(self):
         # 游戏必要的参数配置
@@ -82,7 +371,7 @@ class FightingAircraftGame:
         # 游戏的资源加载
         self.game_resources = GameResources()
         self.game_render = GameRender()
-        self.player_plane = None
+        self.player_plane: AirPlane = None
         # 游戏的渲染
         self.screen = None
         # 游戏网络连接
@@ -213,7 +502,8 @@ class FightingAircraftGame:
                     "map_id": 17,
                     "planes": [
                         {"player_id": server_id, "position_x": 2000, "position_y": 2000, "plane_name": "Bf110"},
-                        {"player_id": 2, "position_x": 2200, "position_y": 2000, "plane_name": "Bf110"}
+                        {"player_id": 2, "position_x": 2200, "position_y": 2000, "plane_name": "Bf110"},
+                        {"player_id": 3, "position_x": 2200, "position_y": 2400, "plane_name": "Bf110"}
                     ]
                 }
                 self.player_id = server_id
@@ -244,42 +534,43 @@ class FightingAircraftGame:
                     if plane_info['player_id'] == self.player_id:
                         # 加载飞机
                         self.player_plane = new_plane
-                        self.player_plane.team_number = 1
-                        self.game_data.team1_airplanes.append(new_plane)
-                        self.game_data.team1_air_collision_group.add(new_plane)
+                        self.player_plane.durability = 9999999999999999
+                        self.game_data.add_team_airplanes(1, new_plane)
                     else:
-                        new_plane.team_number = 2
-                        self.game_data.team2_airplanes.append(new_plane)
-                        self.game_data.team2_air_collision_group.add(new_plane)
+                        self.game_data.add_team_airplanes(2, new_plane)
 
                 # ----------------------------------------------------------------
                 # 防空炮构造
-                # new_flak = self.game_resources.get_flak(
-                #     self.game_data.team2_turrets, self.game_data.list_explodes)
-                # new_flak.set_map_size(self.map_size)
-                # new_flak.set_position(np.array([2200, 2200]))
-                # new_flak.target_obj = self.player_plane
-                # new_flak.team_number = 2
-                # new_flak.all_planes = self.game_data.id_plane_mapping.values()
-                # self.game_data.team2_turrets.append(new_flak)
-                # self.game_data.team2_ground_collision_group.add(new_flak)
-                # # ---------------------------------------------------------------
-                # # 房屋构建
-                # new_building = Building(
-                #     self.game_data.team2_buildings, self.game_data.list_explodes)
-                # new_building.set_map_size(self.map_size)
-                # new_building.body_sprite = get_rect_sprite(
-                #     self.game_resources.get_building_sprite('building01', state='body'))
-                # new_building.ruin_sprite = get_rect_sprite(
-                #     self.game_resources.get_building_sprite('building01', state='ruins'))
-                # new_building.set_sprite(new_building.body_sprite)
-                # new_building.set_position(np.array([2500, 2200]))
-                # explode_sub_textures, explode_sprite = self.game_resources.get_explode_animation()
-                # new_building.explode_sub_textures = explode_sub_textures
-                # new_building.explode_sprite = explode_sprite
-                # new_building.team_number = 2
-                # self.game_data.team2_buildings.append(new_building)
-                # self.game_data.team2_ground_collision_group.add(new_building)
+                new_flak = self.game_resources.get_flak(
+                    2, self.game_data
+                )
+                new_flak.set_map_size(self.map_size)
+                new_flak.set_position(np.array([2200, 2200]))
+                new_flak.all_planes = self.game_data.id_plane_mapping.values()
+                self.game_data.add_team_turrets(2, new_flak)
+
+                new_flak_1 = self.game_resources.get_flak(
+                    2, self.game_data
+                )
+                new_flak_1.set_map_size(self.map_size)
+                new_flak_1.set_position(np.array([2200, 2400]))
+                new_flak_1.all_planes = self.game_data.id_plane_mapping.values()
+                self.game_data.add_team_turrets(2, new_flak_1)
+                # ---------------------------------------------------------------
+                # 房屋构建
+                new_building = Building(
+                    2, self.game_data)
+                new_building.set_map_size(self.map_size)
+                new_building.body_sprite = get_rect_sprite(
+                    self.game_resources.get_building_sprite('building01', state='body'))
+                new_building.ruin_sprite = get_rect_sprite(
+                    self.game_resources.get_building_sprite('building01', state='ruins'))
+                new_building.set_sprite(new_building.body_sprite)
+                new_building.set_position(np.array([2500, 2200]))
+                explode_sub_textures, explode_sprite = self.game_resources.get_explode_animation()
+                new_building.explode_sub_textures = explode_sub_textures
+                new_building.explode_sprite = explode_sprite
+                self.game_data.add_team_buildings(2, new_building)
 
                 self.local_physic_time_stamp = 0
                 # self.local_render_time_stamp = 0
@@ -378,38 +669,32 @@ class FightingAircraftGame:
         """
         执行碰撞检测
         """
-        crashed = {}
-        if plane.team_number == 1:
-            crashed = pygame.sprite.groupcollide(
-                plane.bullet_group, self.game_data.team2_air_collision_group, False, False)
-            if crashed:
-                for bullet in crashed:
-                    # --------------------------------
-                    # 首先利用精确检测看两者是否真正相交
-                    if pygame.sprite.collide_mask(bullet, crashed[bullet][0]) is not None:
-                        # 然后尝试给飞机对应的伤害
-                        sprite = crashed[bullet][0]
-                        if bullet.explode(sprite):
-                            print('enemy eliminated. ')
-                            sprite.on_death()
-                            self.game_data.team2_air_collision_group.remove(sprite)
-        elif plane.team_number == 2:
-            crashed = pygame.sprite.groupcollide(
-                plane.bullet_group, self.game_data.team1_air_collision_group, False, False)
-            if crashed:
-                for bullet in crashed:
-                    # --------------------------------
-                    # 首先利用精确检测看两者是否真正相交
-                    if pygame.sprite.collide_mask(bullet, crashed[bullet][0]) is not None:
-                        # 然后尝试给飞机对应的伤害
-                        sprite = crashed[bullet][0]
-                        if bullet.explode(sprite):
-                            print('enemy eliminated. ')
-                            sprite.on_death()
-                            self.game_data.team1_air_collision_group.remove(sprite)
-        else:
-            print('unknown team_number: {}'.format(plane.team_number))
-        # return crashed
+        # 空中检测
+        crashed = self.game_data.get_air_crashed_group(
+            plane.bullet_group, plane.team_number
+        )
+        if crashed:
+            for bullet in crashed:
+                # --------------------------------
+                # 首先利用精确检测看两者是否真正相交
+                if pygame.sprite.collide_mask(bullet, crashed[bullet][0]) is not None:
+                    # 然后尝试给飞机对应的伤害
+                    sprite = crashed[bullet][0]
+                    if bullet.explode(sprite):
+                        print('enemy eliminated. ')
+        # 地面检测
+        crashed = self.game_data.get_ground_crashed_group(
+            plane.bullet_group, plane.team_number
+        )
+        if crashed:
+            for bullet in crashed:
+                # --------------------------------
+                # 首先利用精确检测看两者是否真正相交
+                if pygame.sprite.collide_mask(bullet, crashed[bullet][0]) is not None:
+                    # 然后尝试给飞机对应的伤害
+                    sprite = crashed[bullet][0]
+                    if bullet.explode(sprite):
+                        print('enemy eliminated. ')
 
     def update_plane_physics(self, delta_time):
         """
@@ -551,18 +836,39 @@ class FightingAircraftGame:
                             self.player_plane.get_engine_temperature(), self.player_plane.velocity,
                             pos[0][0], pos[1][0]),
                         True, (0, 0, 0))
+                    # 将文本绘制到屏幕上
+                    self.screen.blit(text, (10, 10))
+
                     for plane in self.game_data.id_plane_mapping.values():
                         self.game_render.render_plane(plane=plane, team_id=plane.team_number,
                                                       delta_time=delta_time)
-                        # print('\r obj count: {}'.format(len(self.player_plane.bullet_list)), end='')
+                        # 渲染对应的子弹
                         for bullet in plane.bullet_group:
                             self.game_render.render_bullet(bullet=bullet, delta_time=delta_time)
-
                     for explode in self.game_data.list_explodes:
                         self.game_render.render_explode(explode=explode)
 
-                    # 将文本绘制到屏幕上
-                    self.screen.blit(text, (10, 10))
+                    # --------------- 玩家游戏提醒 -----------------
+                    # 如果主控飞机有效的话，可以绘制对应的瞄准图标和对应的检测到的目标飞机
+                    if self.player_plane is not None:
+                        player_plane_vector = self.player_plane.get_direction_vector()
+                        # 绘制准星
+                        player_plane_vector = player_plane_vector * 250
+                        cross_position = (
+                            0.5 * self.game_window_size[0] + player_plane_vector[0][0],
+                            0.5 * self.game_window_size[1] - player_plane_vector[1][0]
+                        )
+                        sprite_position = self.game_resources.cross_hair_sprite.get_rect(
+                            center=cross_position
+                        )
+                        self.screen.blit(
+                            self.game_resources.cross_hair_sprite, sprite_position)
+
+                        # 目标飞机检测并标记
+                        if self.player_plane.detected_AAM_targets is not None:
+                            self.game_render.render_box(self.player_plane.detected_AAM_targets)
+
+
                     # 然后在右上角显示小地图
                     thumbnail_map_sprite_rect = self.game_resources.thumbnail_map_sprite.get_rect()
                     thumbnail_map_render_left = self.game_window_size[0] - thumbnail_map_sprite_rect.width
@@ -571,7 +877,7 @@ class FightingAircraftGame:
                         (thumbnail_map_render_left, 0))
                     scale = thumbnail_map_sprite_rect.width / self.map_size[0]
                     # 然后根据小地图的位置来显示不同的飞机在缩略图中的位置
-                    for plane in self.game_data.id_plane_mapping.values():
+                    for plane in self.game_data.team1_airplanes + self.game_data.team2_airplanes:
                         pos = plane.get_position()
                         if plane.team_number == 1:
                             pygame.draw.circle(

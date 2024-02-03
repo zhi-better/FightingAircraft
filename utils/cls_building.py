@@ -67,6 +67,7 @@ class Building(StaticObject):
     def take_damage(self, damage):
         self.durability -= damage
         if self.durability <= 0:
+            self.game_data.remove_team_buildings(self)
             self.on_death()
             return True
         else:
@@ -85,6 +86,7 @@ class Building(StaticObject):
         self.set_sprite(self.ruin_sprite)
 
         self.create_explode()
+        self.kill()
 
 
 class Turret(DynamicObject, Building):
@@ -93,11 +95,10 @@ class Turret(DynamicObject, Building):
     """
     def __init__(self, team_number, game_data):
         Building.__init__(self, team_number, game_data)
-        DynamicObject.__init__(self, team_number, team_number)
+        DynamicObject.__init__(self, team_number, game_data)
         self.bullet_sprite = None
         self.cannon_sprite = None   # 炮管的精灵
         self._bullet_damage = 10
-        self.team_number = 0
         #  炮塔不能动，但是可以旋转，哈哈哈哈哈哈笑死
         self.speed = 0
         self.velocity = 0
@@ -163,7 +164,10 @@ class Turret(DynamicObject, Building):
         new_bullet.set_direction_vector(self._direction_vector)
         new_bullet.set_damage(self._bullet_damage)
         new_bullet.set_parent(parent=self)
+
+        # 在对应的链表和分组内增加对应的内容
         self.bullet_group.add(new_bullet)
+        # self.game_data.add_air_obj_collision_group(self.team_number, new_bullet)
         return new_bullet
 
     def on_death(self):
@@ -175,8 +179,8 @@ class Flak(Turret):
     """
     防空炮
     """
-    def __init__(self, render_list, list_explodes):
-        super().__init__(render_list, list_explodes)
+    def __init__(self, team_number, game_data):
+        super().__init__(team_number, game_data)
         self.target_obj = None  # 表示攻击的目标
         self.round_bullet_count = 5  # 每轮发射子弹时候的子弹数量
         self.round_shoot_interval = 2  # 每轮设计过程中子弹发射间隔

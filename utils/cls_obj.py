@@ -2,6 +2,8 @@ from abc import abstractmethod
 import numpy as np
 import pygame
 
+from utils.cls_game_data import GameData
+
 
 def vector_2_angle(direction_vector, is_deg=True):
     """
@@ -66,7 +68,7 @@ class StaticObject(pygame.sprite.Sprite):
     def __init__(self, team_number, game_data):
         # 调用父类的初始化方法
         super().__init__()
-        self.game_data = game_data
+        self.game_data: GameData = game_data
         self.mask = None
         self._position = np.zeros((2,))
         self.rect = pygame.Rect(0, 0, 0, 0)
@@ -166,21 +168,21 @@ class DynamicObject(StaticObject):
         :return:
         """
         # ---------------------------------------------
+        # move
+        _2d_velocity = (int(self.velocity * delta_time * 0.1) *
+                        np.multiply(self._direction_vector.reshape((2, 1)), np.array([1, -1]).reshape((2, 1))))
+
+        # ---------------------------------------------
         # turn
         direction_vector = self._direction_vector
         # print("\rdirection vector: {}".format(direction_vector[0], direction_vector[1]), end='')
-        ang_velocity_tmp = self.angular_velocity * delta_time * 0.035
+        ang_velocity_tmp = self.angular_velocity * delta_time * 0.02
         rotation_matrix = np.array(
             [[np.cos(np.radians(ang_velocity_tmp)), -np.sin(np.radians(ang_velocity_tmp))],
              [np.sin(np.radians(ang_velocity_tmp)), np.cos(np.radians(ang_velocity_tmp))]])
         direction_vector = np.dot(rotation_matrix, direction_vector)
         # 方向向量要归一化
         direction_vector = direction_vector / np.linalg.norm(direction_vector)
-        # ---------------------------------------------
-        # move
-        _2d_velocity = (int(self.velocity * delta_time * 0.1) *
-                        np.multiply(direction_vector.reshape((2, 1)), np.array([1, -1]).reshape((2, 1))))
-
         return self.get_position() + _2d_velocity, direction_vector
 
     def get_direction_vector(self):

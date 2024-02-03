@@ -66,16 +66,23 @@ def detect_airplane_target_obj(airplane_obj, target_objs, distance_threshold, an
     :param objs:
     :return:
     """
+    most_valuable_target = None
+    min_cross = np.sin(np.deg2rad(angle_threshold))
     for target_obj in target_objs:
         if target_obj.team_number != airplane_obj.team_number:
-            distances = np.linalg.norm(target_obj.get_position() - airplane_obj.get_position())
+            lead_positions = target_obj.get_position() - airplane_obj.get_position()
+            distances = np.linalg.norm(lead_positions)
+            norm_target_vec = lead_positions / distances
             if distances < distance_threshold:
                 # 判断角度是否达到了要求
-                # ...
+                cross_value = np.abs(
+                    np.cross(norm_target_vec.T,
+                             (airplane_obj.get_direction_vector() * np.array([1, -1]).reshape((2, 1))).T))
+                if cross_value < min_cross:
+                    min_cross = cross_value
+                    most_valuable_target = target_obj
 
-                return target_obj
-
-    return None
+    return most_valuable_target
 
 
 class AirPlaneSprites:
@@ -92,7 +99,7 @@ class AirPlaneParams:
     def __init__(self):
         self.id = 0
         self.name = 'AirPlane'
-        self.health_points = 1000  # 生命值
+        # self.health_points = 1000  # 生命值
         self.angular_speed = 0.8  # 转向速度
         self.speed = 0  # 正常运行速度
         self.max_speed = 0  # 最大速度
@@ -107,6 +114,7 @@ class AirPlaneParams:
 
 class AirPlane(DynamicObject, Building):
     def __init__(self, team_number, game_data):
+        self.detected_AAM_targets = None
         DynamicObject.__init__(self, team_number, game_data)
         Building.__init__(self, team_number, game_data)
         self.plane_type = PlaneType.Simple
@@ -124,6 +132,15 @@ class AirPlane(DynamicObject, Building):
         self.bullet_group = pygame.sprite.Group()
         self.timer_counter = 0
         self.switch_direction = False
+
+    def take_damage(self, damage):
+        self.durability -= damage
+        if self.durability <= 0:
+            self.game_data.remove_team_airplanes(self)
+            self.on_death()
+            return True
+        else:
+            return False
 
     def load_sprite(self, img_file_name):
         self.image_template = pygame.image.load(img_file_name)
@@ -278,6 +295,16 @@ class AirPlane(DynamicObject, Building):
                 self.angular_velocity = self._air_plane_params.angular_speed * -2
         else:
             self.update_roll_attitude(target_roll_attitude=0)
+        # 根据目前的姿态来重新调整对应的转向速度，优化控制手感
+        if self.angular_velocity != 0:
+            # 此处设置一个原则，如果是在翻转情境下无法左右转向，否则不太合理
+            if 0 < self.roll_attitude <= 9:
+                self.angular_velocity = self.roll_attitude / 9 * self.angular_speed
+            elif 27 <= self.roll_attitude < 36:
+                self.angular_velocity = (self.roll_attitude - 36) / 9 * self.angular_speed
+            else:
+                self.angular_velocity = 0
+        # print(f'\rself.angular_velocity: {self.angular_velocity}, self.angular_speed: {self.angular_speed}', end='')
 
         # ---------------------------------------------
         # 俯仰
@@ -355,6 +382,18 @@ class AirPlane(DynamicObject, Building):
             else:
                 self.secondary_weapon_reload_counter -= delta_time * 0.001
 
+        # 获取到敌人的飞机坐标
+        target_team_number = 0
+        if self.team_number == 1:
+            target_team_number = 2
+        elif self.team_number == 2:
+            target_team_number = 1
+        else:
+            print('wrong team number')
+        self.detected_AAM_targets = detect_airplane_target_obj(
+            self, self.game_data.get_team_airplanes(target_team_number),
+            800, 30)
+
         # --------------------------------------------------------------------
         # 重置飞行状态
         self.input_state = InputState.NoInput
@@ -368,14 +407,15 @@ class AirPlane(DynamicObject, Building):
         self.set_position(pos)
 
     def take_damage(self, damage):
-        health = self._air_plane_params.health_points
+        health = self.durability
         health -= damage
         # print(f'take_damage: {damage}')
-        self._air_plane_params.health_points = health
+        self.durability = health
         if health <= 0:
-            health = 1000
-            self._air_plane_params.health_points = health
+            # health = 1000
+            # self._air_plane_params.health_points = health
             self.create_explode()
+            self.on_death()
             return True
         else:
             return False
@@ -413,13 +453,13 @@ class AirPlane(DynamicObject, Building):
         # direction = np.array([-direction[1], direction[0]])
         new_aam = AAM(self.team_number, self.game_data)
         new_aam.set_map_size(self.get_map_size())
-        new_aam.set_sprite(pygame.transform.rotate(
-            aam_sprite, vector_2_angle(self.get_direction_vector())))
+        # 由于此处的sprite会自己变化，所以应该给的是初始的姿态的 sprite
+        new_aam.set_sprite(aam_sprite)
         local_position[1] = np.cos(np.radians(self.roll_attitude * 10)) * local_position[1]
         new_aam.set_position(local_to_world(
             self.get_position(), direction, local_point=local_position))
-        new_aam.set_speed(self.velocity + 2)
-        new_aam.angular_speed = 2.5
+        new_aam.set_speed(self.velocity + 4)
+        new_aam.angular_speed = 1.5
         new_aam.set_direction_vector(direction)
         new_aam._damage = 300
         new_aam.target_object = target
@@ -431,15 +471,10 @@ class AirPlane(DynamicObject, Building):
         死亡前做点事情吧
         :return:
         """
-        explode = Explode(self.game_data)
-        # 此处对应的 list 给他一个新的 list, 防止影响原有的 list
-        explode.set_explode_sprites(
-            self.explode_sub_textures.copy(), self.explode_sprite)
-        explode.set_map_size(self.get_map_size())
-        explode.set_position(self.get_position())
-
+        self.create_explode()
         # 然后将飞机从对应的渲染链表中移除
-
+        self.game_data.remove_team_airplanes(self)
+        self.kill()
 
     @abstractmethod
     def primary_weapon_attack(self):
@@ -461,26 +496,13 @@ class FighterJet(AirPlane):
         self.reload_time = 20
 
     def primary_weapon_attack(self):
-        if self.team_number == 1:
-            target_team_number = 2
-        elif self.team_number == 2:
-            target_team_number = 1
-        else:
-            print('wrong team number')
-            return
-        # 获取到敌人的飞机坐标
-        target = detect_airplane_target_obj(
-            self, self.game_data.get_team_airplanes(target_team_number),
-            1000, 30)
-        if target is not None:
-            self.create_AAM(
-                self.air_plane_sprites.primary_bullet_sprite,
-                np.array([self._air_plane_params.plane_height * 0.4, 0]),
-                self.get_direction_vector(),
-                target
-            )
-        else:
-            print('no valid target! ')
+        # 都会发射，不过如果锁定后可以锁定目标
+        self.create_AAM(
+            self.air_plane_sprites.primary_bullet_sprite,
+            np.array([self._air_plane_params.plane_height * 0.4, 0]),
+            self.get_direction_vector(),
+            self.detected_AAM_targets
+        )
         # height_start = self._air_plane_params.plane_height * 0.4
         # position_list = [[height_start, self._air_plane_params.plane_height * 0.3],
         #                  [height_start, self._air_plane_params.plane_height * 0.1],
