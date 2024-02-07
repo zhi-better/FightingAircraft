@@ -1,64 +1,145 @@
+import time
+
+import numpy as np
+from torch.autograd import Variable
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
 
-class FusionNet(nn.Module):
-    def __init__(self, input_size_map, input_size_self, output_size):
-        super(FusionNet, self).__init__()
+class AIAircraftNet(nn.Module):
+    def __init__(self):
+        super(AIAircraftNet, self).__init__()
+        """
+        神经网络 v1.0 输入：
+            所有敌人相对于自身的位置，方向，速度，转向速度，自身温度
+            2 + 2 + 1 + 1 + 1 = 7
+        神经网络 v2.0 输入：
+            增加自身的引擎温度，速度，转向速度
+            冻结1.0神经网络参数，开始训练对于自身状态评估的神经网络结构和融合网络的参数，
+            使得生成更好的网络决策结果。
+        神经网络输出：
+        ==> 下一步的动作：加速，减速，左转，右转，左急转，右急转，拉升，无动作，主武器攻击，副武器攻击
+            8 + 2 = 10
+        """
+        self.map_fc1 = nn.Linear(7, 32)
+        self.map_fc2 = nn.Linear(32, 32)
 
-        self.map_fc1 = nn.Linear(input_size_map, 64)
-        self.map_fc2 = nn.Linear(64, 32)
+        self.output_fc = nn.Linear(32, 10)  # 输出层，产生8种可能的动作
 
-        self.self_fc1 = nn.Linear(input_size_self, 64)
-        self.self_fc2 = nn.Linear(64, 32)
+    def forward(self, input_data):
+        x = F.relu(self.map_fc1(input_data.float()))  # 使用ReLU作为激活函数
+        x = F.relu(self.map_fc2(x))
+        output = self.output_fc(x)
+        probabilities = F.softmax(output, dim=1)  # 使用softmax激活函数得到输出的概率
+        return probabilities
 
-        self.fc3 = nn.Linear(64, 32)
-        self.fc4 = nn.Linear(32, output_size)
 
-    def forward(self, map_input, self_input):
-        map_out = F.relu(self.map_fc1(map_input))
-        map_out = F.relu(self.map_fc2(map_out))
+class DQN(object):
+    def __init__(self):
+        self.eval_net, self.target_net = AIAircraftNet(), AIAircraftNet()
+        self.MEMORY_CAPACITY = 2000
+        self.N_STATES = 6
+        self.LR = 0.01
+        self.EPSILON = 0.9
+        self.N_ACTIONS = 8
+        self.ENV_A_SHAPE = 0       # ???????????
+        self.TARGET_REPLACE_ITER = 100   # target update frequency
+        self.BATCH_SIZE = 32
+        self.GAMMA = 0.9                 # reward discount
 
-        self_out = F.relu(self.self_fc1(self_input))
-        self_out = F.relu(self.self_fc2(self_out))
+        self.learn_step_counter = 0                                     # for target updating
+        self.memory_counter = 0                                         # for storing memory
+        self.memory = np.zeros((self.MEMORY_CAPACITY, self.N_STATES * 2 + 2))     # initialize memory
+        self.optimizer = torch.optim.Adam(self.eval_net.parameters(), lr=self.LR)
+        self.loss_func = nn.MSELoss()
 
-        fusion_out = torch.cat((map_out, self_out), dim=1)
-        fusion_out = F.relu(self.fc3(fusion_out))
-        fusion_out = self.fc4(fusion_out)
+    def choose_action(self, x):
+        x = torch.unsqueeze(torch.FloatTensor(x), 0)
+        # input only one sample
+        if np.random.uniform() < self.EPSILON:   # greedy
+            actions_value = self.eval_net.forward(x)
+            action = torch.max(actions_value, 1)[1].data.numpy()
+            action = action[0] if self.ENV_A_SHAPE == 0 else action.reshape(self.ENV_A_SHAPE)  # return the argmax index
+        else:   # random
+            action = np.random.randint(0, self.N_ACTIONS)
+            action = action if self.ENV_A_SHAPE == 0 else action.reshape(self.ENV_A_SHAPE)
+        return action
 
-        action_probs = F.softmax(fusion_out, dim=1)
+    def store_transition(self, s, a, r, s_):
+        transition = np.hstack((s, [a, r], s_))
+        # replace the old memory with new memory
+        index = self.memory_counter % self.MEMORY_CAPACITY
+        self.memory[index, :] = transition
+        self.memory_counter += 1
 
-        return action_probs
+    def learn(self):
+        # target parameter update
+        if self.learn_step_counter % self.TARGET_REPLACE_ITER == 0:
+            self.target_net.load_state_dict(self.eval_net.state_dict())
+        self.learn_step_counter += 1
 
-# 设置输入和输出的维度
-input_size_map = 20  # 适应地图上所有飞机的信息
-input_size_self = 10  # 适应自己的飞机信息
-output_size = 6  # 可能的动作数量
+        # sample batch transitions
+        sample_index = np.random.choice(self.MEMORY_CAPACITY, self.BATCH_SIZE)
+        b_memory = self.memory[sample_index, :]
+        b_s = torch.FloatTensor(b_memory[:, :self.N_STATES])
+        b_a = torch.LongTensor(b_memory[:, self.N_STATES:self.N_STATES+1].astype(int))
+        b_r = torch.FloatTensor(b_memory[:, self.N_STATES+1:self.N_STATES+2])
+        b_s_ = torch.FloatTensor(b_memory[:, -self.N_STATES:])
 
-# 初始化神经网络
-fusion_net = FusionNet(input_size_map, input_size_self, output_size)
+        # q_eval w.r.t the action in experience
+        q_eval = self.eval_net(b_s).gather(1, b_a)  # shape (batch, 1)
+        q_next = self.target_net(b_s_).detach()     # detach from graph, don't back propagate
+        q_target = b_r + self.GAMMA * q_next.max(1)[0].view(self.BATCH_SIZE, 1)   # shape (batch, 1)
+        loss = self.loss_func(q_eval, q_target)
 
-# 假设有3个飞机
-num_planes = 3
+        self.optimizer.zero_grad()
+        loss.backward()
+        self.optimizer.step()
 
-# 创建模拟输入数据
-map_inputs = [torch.rand(1, input_size_map) for _ in range(num_planes)]  # 每个飞机对应的地图信息
-self_inputs = [torch.rand(1, input_size_self) for _ in range(num_planes)]  # 每个飞机自身信息
+# # Hyper Parameters
+# BATCH_SIZE = 32
+# LR = 0.01                   # learning rate
+# EPSILON = 0.9               # greedy policy
+# GAMMA = 0.9                 # reward discount
+# TARGET_REPLACE_ITER = 100   # target update frequency
+# MEMORY_CAPACITY = 2000
+# env = gym.make('CartPole-v0')
+# # env = env.unwrapped
+# N_ACTIONS = env.action_space.n
+# N_STATES = env.observation_space.shape[0]
+# ENV_A_SHAPE = 0 if isinstance(env.action_space.sample(), int) else env.action_space.sample().shape     # to confirm the shape
+#
+# dqn = DQN()
+#
+# print('\nCollecting experience...')
+# for i_episode in range(400):
+#     s = env.reset()
+#     ep_r = 0
+#     while True:
+#         env.render()
+#         a = dqn.choose_action(s)
+#
+#         # take action
+#         s_, r, done, info = env.step(a)
+#
+#         # modify the reward
+#         x, x_dot, theta, theta_dot = s_
+#         r1 = (env.x_threshold - abs(x)) / env.x_threshold - 0.8
+#         r2 = (env.theta_threshold_radians - abs(theta)) / env.theta_threshold_radians - 0.5
+#         r = r1 + r2
+#
+#         dqn.store_transition(s, a, r, s_)
+#
+#         ep_r += r
+#         if dqn.memory_counter > MEMORY_CAPACITY:
+#             dqn.learn()
+#             if done:
+#                 print('Ep: ', i_episode,
+#                       '| Ep_r: ', round(ep_r, 2))
+#
+#         if done:
+#             break
+#         s = s_
 
-# 处理每个飞机的信息并生成对应的动作概率分布
-action_probs_list = []
-for i in range(num_planes):
-    action_probs = fusion_net(map_inputs[i], self_inputs[i])
-    action_probs_list.append(action_probs)
-
-# 计算所有飞机的动作概率分布的平均值
-avg_action_probs = torch.stack(action_probs_list).mean(dim=0)
-
-# 选定一个飞机作为攻击目标，使用其输出的概率分布
-target_plane_index = 0
-attack_action_probs = action_probs_list[target_plane_index]
-
-# 打印结果
-print("所有飞机的动作概率分布的平均值：", avg_action_probs)
-print("选定的攻击目标飞机的动作概率分布：", attack_action_probs)

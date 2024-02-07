@@ -2,6 +2,8 @@ import base64
 import json
 import logging
 import os
+
+import torch
 from memory_profiler import profile
 import random
 import struct
@@ -534,10 +536,11 @@ class FightingAircraftGame:
                     if plane_info['player_id'] == self.player_id:
                         # 加载飞机
                         self.player_plane = new_plane
-                        self.player_plane.durability = 9999999999999999
+                        self.player_plane.durability = 9999999
                         self.game_data.add_team_airplanes(1, new_plane)
                     else:
                         self.game_data.add_team_airplanes(2, new_plane)
+                        new_plane.set_direction_vector(np.random.rand(2, 1))
 
                 # ----------------------------------------------------------------
                 # 防空炮构造
@@ -664,6 +667,42 @@ class FightingAircraftGame:
                 value.input_state = InputState(actions[key])
             else:
                 value.input_state = InputState.NoInput
+
+        states = self.player_plane.get_plane_states(self.game_data.team2_airplanes)
+        if len(states) != 0:
+            actions_predict = self.player_plane.agent_network.forward(torch.from_numpy(states.astype(float)))
+            probs = torch.mean(actions_predict, dim=0)
+            print('\rcurrent action: 加速{:.3f} ，减速{:.3f} 左转{:.3f} 右转{:.3f} 左急转{:.3f} 右急转{:.3f} 拉升{:.3f} 无动作{:.3f} 主武器{:.3f} 副武器{:.3f}'.format(
+                probs[0], probs[1],probs[2],probs[3],probs[4],probs[5],probs[6],probs[7],probs[8],probs[9],), end='')
+            # 将概率张量划分为三组
+            group1 = torch.stack((probs[0], probs[1], probs[7]), dim=0)  # 加速，减速，无动作
+            group2 = torch.stack((probs[2], probs[3], probs[4], probs[5], probs[7]),
+                                 dim=0)  # 左转，右转，左急转，右急转，无动作
+            group3 = torch.stack((probs[8], probs[9], probs[7]), dim=0)  # 主武器攻击，副武器攻击
+            # 找到每组中概率最大的动作
+            max_prob_action_group1 = torch.argmax(group1)
+            max_prob_action_group2 = torch.argmax(group2)
+            max_prob_action_group3 = torch.argmax(group3)
+            self.player_plane.input_state = InputState.NoInput
+            if max_prob_action_group1 == 0:
+                self.player_plane.input_state = self.player_plane.input_state | InputState.SpeedUp
+            elif max_prob_action_group1 == 1:
+                self.player_plane.input_state = self.player_plane.input_state | InputState.SlowDown
+
+            if max_prob_action_group2 == 0:
+                self.player_plane.input_state = self.player_plane.input_state | InputState.TurnLeft
+            elif max_prob_action_group2 == 1:
+                self.player_plane.input_state = self.player_plane.input_state | InputState.TurnRight
+            elif max_prob_action_group2 == 2:
+                self.player_plane.input_state = self.player_plane.input_state | InputState.SharpTurnLeft
+            elif max_prob_action_group2 == 3:
+                self.player_plane.input_state = self.player_plane.input_state | InputState.SharpTurnLeft
+
+            if max_prob_action_group3 == 0:
+                self.player_plane.input_state = self.player_plane.input_state | InputState.PrimaryWeaponAttack
+            elif max_prob_action_group3 == 1:
+                self.player_plane.input_state = self.player_plane.input_state | InputState.SecondaryWeaponAttack
+
 
     def check_bullet_collision(self, plane):
         """

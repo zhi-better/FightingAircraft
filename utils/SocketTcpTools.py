@@ -434,6 +434,9 @@ class TcpClientTools(TcpBaseTools):
         except ConnectionRefusedError as e:
             print(e)
             return False
+        except TimeoutError as e:
+            print(e)
+            return False
         self.connect_state = True
         print("connected to server successfully. ")
         self.exit_event.clear()
@@ -458,7 +461,7 @@ class TcpClientTools(TcpBaseTools):
         except OSError as e:
             self.close_socket()
             if self.callback_fun:
-                self.callback_fun(CallbackCommand.SocketClose, tcp_socket)
+                self.callback_fun(CallbackCommand.SocketClose, self.tcp_socket)
             print(e)
 
 

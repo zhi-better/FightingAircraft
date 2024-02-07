@@ -6,6 +6,7 @@ from overrides import overrides
 
 from utils.cls_building import Building
 from utils.cls_bullets import *
+from utils.cls_dqn_agent import AIAircraftNet
 from utils.cls_explode import Explode
 from utils.cls_obj import *
 from abc import ABCMeta, abstractmethod
@@ -132,6 +133,31 @@ class AirPlane(DynamicObject, Building):
         self.bullet_group = pygame.sprite.Group()
         self.timer_counter = 0
         self.switch_direction = False
+        self.agent_network = AIAircraftNet()
+
+    def get_plane_states(self, planes_list):
+        """
+        获取此时 planes 相对于自身的位置参数，并将其整理为一个对应的 ndarray
+        :return:
+        """
+        states = []
+        vec_self = self.get_direction_vector()
+        for plane in planes_list:
+            pos = plane.get_position() - self.get_position()
+            vec_1 = plane.get_direction_vector()
+            # 计算两个向量的夹角
+            cosine_angle = np.dot(vec_self.T, vec_1) / (np.linalg.norm(vec_self) * np.linalg.norm(vec_1))
+            angle = np.arccos(cosine_angle)[0]
+            # 以向量夹角构造一个新的向量
+            new_vector = np.array([np.cos(angle), np.sin(angle)])
+            velocity = plane.velocity
+            angular_velocity = plane.angular_velocity
+            states.append(
+                np.hstack((pos.reshape((-1)), new_vector.reshape((-1)),
+                           np.array([velocity]), np.array([angular_velocity]),
+                           np.array([self._engine_temperature]))))
+
+        return np.array(states)
 
     def take_damage(self, damage):
         self.durability -= damage
@@ -447,6 +473,22 @@ class AirPlane(DynamicObject, Building):
         new_bullet.set_speed(self.velocity + 2)
         new_bullet.set_direction_vector(direction)
         new_bullet._damage = 10
+        new_bullet.set_parent(self)
+        self.bullet_group.add(new_bullet)
+
+    def create_RKT(self, RKT_sprite, local_position, direction):
+        # direction = np.array([-direction[1], direction[0]])
+        new_bullet = Bullet(self.team_number, self.game_data)
+        new_bullet.set_map_size(self.get_map_size())
+        new_bullet.set_sprite(pygame.transform.rotate(
+            RKT_sprite, vector_2_angle(self.get_direction_vector())))
+        local_position[1] = np.cos(np.radians(self.roll_attitude * 10)) * local_position[1]
+        new_bullet.set_position(local_to_world(
+            self.get_position(), direction, local_point=local_position))
+        new_bullet.set_speed(self.velocity + 4)
+        new_bullet.set_direction_vector(direction)
+        new_bullet._damage = 300
+        new_bullet.set_parent(self)
         self.bullet_group.add(new_bullet)
 
     def create_AAM(self, aam_sprite, local_position, direction, target):
@@ -463,7 +505,7 @@ class AirPlane(DynamicObject, Building):
         new_aam.set_direction_vector(direction)
         new_aam._damage = 300
         new_aam.target_object = target
-        new_aam.parent = self
+        new_aam.set_parent(self)
         self.bullet_group.add(new_aam)
 
     def on_death(self):
@@ -497,11 +539,10 @@ class FighterJet(AirPlane):
 
     def primary_weapon_attack(self):
         # 都会发射，不过如果锁定后可以锁定目标
-        self.create_AAM(
+        self.create_RKT(
             self.air_plane_sprites.primary_bullet_sprite,
             np.array([self._air_plane_params.plane_height * 0.4, 0]),
-            self.get_direction_vector(),
-            self.detected_AAM_targets
+            self.get_direction_vector()
         )
         # height_start = self._air_plane_params.plane_height * 0.4
         # position_list = [[height_start, self._air_plane_params.plane_height * 0.3],

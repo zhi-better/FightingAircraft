@@ -59,17 +59,6 @@ class RKT(Bullet):
     """
     def __init__(self, team_number, game_data):
         super().__init__(team_number, game_data)
-        self.animation_list = []
-
-    def explode(self, target):
-        """
-        火箭弹爆炸需要有爆炸动画
-        :return:
-        """
-        super().explode(target=target)
-        # print('explode! ')
-
-
 
 class AAM(RKT):
     """
