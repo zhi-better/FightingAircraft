@@ -171,11 +171,14 @@ def example_callback(callback_cmd, param):
                     # print(ret[1])
                     self.frame_info.set(ret[1][1], ret[1][2])
                     # 此处还得继续判断当前是否转换完了，如果没有的话需要继续转换接收到的内容
-                    recv_data = recv_data[self.header_length:len(recv_data)]
-                    if len(recv_data) != 0:
-                        self.process_raw_data(recv_data, tcp_client)
+
+                    recv_data_body = recv_data[self.header_length:len(recv_data)]
+                    if len(recv_data_body) != 0:
+                        self.process_raw_data(recv_data_body, tcp_client)
                 else:
                     print(recv_data)
+                    # 此处应该是协议解析出问题了
+
             else:
                 print(recv_data)
 

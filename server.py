@@ -6,9 +6,9 @@ import threading
 import time
 import pygame
 
-from main import CommandType
 from utils.SocketTcpTools import *
 from utils.cls_airplane import *
+from utils.cls_game_data import CommandType
 
 
 def get_ipv4_address():

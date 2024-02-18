@@ -3,28 +3,22 @@ from enum import Enum, IntFlag
 import numpy as np
 import pygame
 from overrides import overrides
+import torch
 
 from utils.cls_building import Building
 from utils.cls_bullets import *
 from utils.cls_dqn_agent import AIAircraftNet
 from utils.cls_explode import Explode
+from utils.cls_game_data import PlaneType
 from utils.cls_obj import *
 from abc import ABCMeta, abstractmethod
+
 
 
 class AttitudeType(Enum):
     NoneAttitude = 0
     RollAttitude = 1
     PitchAttitude = 2
-
-
-class PlaneType(Enum):
-    Simple = 0                      # 简单飞机
-    Fighter = 1                     # 战斗机（空对空）
-    AttackAircraft = 2              # 攻击机（空对地）
-    Bomber = 3                      # 轰炸机（对地攻击）
-    Reconnaissance = 4              # 侦察机（侦察视野）
-    MultiRoleCombatAircraft = 5     # 多用途飞机
 
 
 class InputState(IntFlag):
@@ -134,6 +128,44 @@ class AirPlane(DynamicObject, Building):
         self.timer_counter = 0
         self.switch_direction = False
         self.agent_network = AIAircraftNet()
+
+    def ai_control(self, states):
+        """
+        只是 AI 生成控制策略，并没有进行物理更新
+        :param states:
+        :return:
+        """
+        if len(states) != 0:
+            actions_predict = self.agent_network.forward(torch.from_numpy(states.astype(float)))
+            probs = torch.mean(actions_predict, dim=0)
+            print('\rcurrent action: 加速{:.3f} ，减速{:.3f} 左转{:.3f} 右转{:.3f} 左急转{:.3f} 右急转{:.3f} 拉升{:.3f} 无动作{:.3f} 主武器{:.3f} 副武器{:.3f}'.format(
+                probs[0], probs[1],probs[2],probs[3],probs[4],probs[5],probs[6],probs[7],probs[8],probs[9],), end='')
+            # 将概率张量划分为三组
+            group1 = torch.stack((probs[0], probs[1], probs[7]), dim=0)  # 加速，减速，无动作
+            group2 = torch.stack((probs[2], probs[3], probs[4], probs[5], probs[7]),
+                                 dim=0)  # 左转，右转，左急转，右急转，无动作
+            group3 = torch.stack((probs[8], probs[9], probs[7]), dim=0)  # 主武器攻击，副武器攻击
+            # 找到每组中概率最大的动作
+            max_prob_action_group1 = torch.argmax(group1)
+            max_prob_action_group2 = torch.argmax(group2)
+            max_prob_action_group3 = torch.argmax(group3)
+            self.input_state = InputState.NoInput
+            if max_prob_action_group1 == 0:
+                self.input_state = self.input_state | InputState.SpeedUp
+            elif max_prob_action_group1 == 1:
+                self.input_state = self.input_state | InputState.SlowDown
+            if max_prob_action_group2 == 0:
+                self.input_state = self.input_state | InputState.TurnLeft
+            elif max_prob_action_group2 == 1:
+                self.input_state = self.input_state | InputState.TurnRight
+            elif max_prob_action_group2 == 2:
+                self.input_state = self.input_state | InputState.SharpTurnLeft
+            elif max_prob_action_group2 == 3:
+                self.input_state = self.input_state | InputState.SharpTurnLeft
+            if max_prob_action_group3 == 0:
+                self.input_state = self.input_state | InputState.PrimaryWeaponAttack
+            elif max_prob_action_group3 == 1:
+                self.input_state = self.input_state | InputState.SecondaryWeaponAttack
 
     def get_plane_states(self, planes_list):
         """
@@ -539,21 +571,21 @@ class FighterJet(AirPlane):
 
     def primary_weapon_attack(self):
         # 都会发射，不过如果锁定后可以锁定目标
-        self.create_RKT(
-            self.air_plane_sprites.primary_bullet_sprite,
-            np.array([self._air_plane_params.plane_height * 0.4, 0]),
-            self.get_direction_vector()
-        )
-        # height_start = self._air_plane_params.plane_height * 0.4
-        # position_list = [[height_start, self._air_plane_params.plane_height * 0.3],
-        #                  [height_start, self._air_plane_params.plane_height * 0.1],
-        #                  [height_start, -self._air_plane_params.plane_height * 0.1],
-        #                  [height_start, -self._air_plane_params.plane_height * 0.3]]
-        #
-        # for pos in position_list:
-        #     self.create_bullet(
-        #         self.air_plane_sprites.primary_bullet_sprite, np.array(pos),
-        #         self.get_direction_vector())
+        # self.create_RKT(
+        #     self.air_plane_sprites.primary_bullet_sprite,
+        #     np.array([self._air_plane_params.plane_height * 0.4, 0]),
+        #     self.get_direction_vector()
+        # )
+        height_start = self._air_plane_params.plane_height * 0.4
+        position_list = [[height_start, self._air_plane_params.plane_height * 0.3],
+                         [height_start, self._air_plane_params.plane_height * 0.1],
+                         [height_start, -self._air_plane_params.plane_height * 0.1],
+                         [height_start, -self._air_plane_params.plane_height * 0.3]]
+
+        for pos in position_list:
+            self.create_bullet(
+                self.air_plane_sprites.primary_bullet_sprite, np.array(pos),
+                self.get_direction_vector())
 
     def secondary_weapon_attack(self):
         position_list = [[self._air_plane_params.plane_height * 0.4, 0]]

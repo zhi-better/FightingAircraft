@@ -1,12 +1,60 @@
+import pygame
 import json
+import logging
 import os
 from enum import Enum
 import xml.etree.ElementTree as ET
 from typing import Dict, List
-import pygame
 from utils.cls_airplane import *
 from utils.cls_building import *
 
+def setup_logging(log_file_path):
+    """
+    设置日志记录，将日志同时输出到控制台和文件中
+
+    Parameters:
+    - log_file_path (str): 日志文件路径
+
+    Returns:
+    - logging.Logger: 配置好的Logger对象
+    """
+    # 删除已存在的日志文件
+    if os.path.exists(log_file_path):
+        os.remove(log_file_path)
+
+    # 创建Logger对象
+    logger = logging.getLogger('my_logger')
+    logger.setLevel(logging.DEBUG)
+
+    # 创建文件处理器并设置级别为DEBUG
+    file_handler = logging.FileHandler(log_file_path)
+    file_handler.setLevel(logging.DEBUG)
+
+    # 创建控制台处理器并设置级别为INFO
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(logging.INFO)
+
+    # 创建格式化器
+    formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+
+    # 将格式化器添加到处理器
+    file_handler.setFormatter(formatter)
+    console_handler.setFormatter(formatter)
+
+    # 将处理器添加到Logger对象
+    logger.addHandler(file_handler)
+    logger.addHandler(console_handler)
+
+    return logger
+
+
+class PlaneType(Enum):
+    Simple = 0                      # 简单飞机
+    Fighter = 1                     # 战斗机（空对空）
+    AttackAircraft = 2              # 攻击机（空对地）
+    Bomber = 3                      # 轰炸机（对地攻击）
+    Reconnaissance = 4              # 侦察机（侦察视野）
+    MultiRoleCombatAircraft = 5     # 多用途飞机
 
 class CommandType(Enum):
     cmd_none = 0
@@ -16,6 +64,54 @@ class CommandType(Enum):
     cmd_player_action = 4
     cmd_frame_update = 5
     cmd_matching_state_change = 6
+
+class PlaneName(Enum):
+    Ar234 = 'Ar234'
+    B17 = 'B17'
+    B24 = 'B24'
+    B25 = 'B25'
+    Ba349 = 'Ba349'
+    Bf109 = 'Bf109'
+    Bf110 = 'Bf110'
+    Bv138 = 'Bv138'
+    C43 = 'C43'
+    Cg4a = 'Cg4a'
+    Do17 = 'Do17'
+    Do24 = 'Do24'
+    Do335 = 'Do335'
+    F3F = 'F3F'
+    F4F = 'F4F'
+    F4U = 'F4U'
+    F80 = 'F80'
+    fokd = 'fokd'
+    Fw189 = 'Fw189'
+    Fw190 = 'Fw190'
+    He111 = 'He111'
+    He115 = 'He115'
+    He162 = 'He162'
+    Ho229 = 'Ho229'
+    Hs123 = 'Hs123'
+    Ju52 = 'Ju52'
+    Ju87 = 'Ju87'
+    Ju88 = 'Ju88'
+    Ju188 = 'Ju188'
+    lippisch = 'lippisch'
+    Me163 = 'Me163'
+    Me262 = 'Me262'
+    P38 = 'P38'
+    P39 = 'P39'
+    P40 = 'P40'
+    P47 = 'P47'
+    P51 = 'P51'
+    P61 = 'P61'
+    SBD = 'SBD'
+
+class FlakName(Enum):
+    flak1 = 'flak1'
+    flak2 = 'flak2'
+
+
+
 
 
 class GameData:

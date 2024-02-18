@@ -60,6 +60,10 @@ class RKT(Bullet):
     def __init__(self, team_number, game_data):
         super().__init__(team_number, game_data)
 
+    def explode(self, target):
+        super().explode(target)
+
+
 class AAM(RKT):
     """
     追踪导弹，相较于普通火箭弹增加了追踪功能

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<map version="1.10" tiledversion="1.10.2" orientation="orthogonal" renderorder="left-up" width="40" height="40" tilewidth="256" tileheight="256" infinite="0" nextlayerid="3" nextobjectid="1">
+ <tileset firstgid="1" name="templet2" tilewidth="256" tileheight="256" tilecount="64" columns="8">
+  <image source="templet2.png" width="2048" height="2048"/>
+ </tileset>
+ <layer id="1" name="ground" width="40" height="40">
+  <data encoding="base64" compression="zlib">
+   eJzt1NsNwCAMQ9GswgjZf7lOQEt42Ei9H+cvSMaRkhGRAH6nDXLmGp1V5qr0mJ036t3OzpzKtqN31X5Xe1bme8uj7LB6S1y3pvIvd4Zbu+vdPHeur6zuLAAAAAAAnQcz+i3Q
+  </data>
+ </layer>
+ <layer id="2" name="buildings" width="40" height="40" visible="0">
+  <data encoding="base64" compression="zlib">
+   eJzt07ENACAIAEFmcQP3X87KxMbE2KDhimug+QJ6RHSgjLaR3bW2nc4z+m52+v7omx27G8xuW/te/+GXGwEAAIA6BpYGMFI=
+  </data>
+ </layer>
+</map>
