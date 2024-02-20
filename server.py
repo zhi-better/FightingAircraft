@@ -154,6 +154,17 @@ class FightingAircraftGameServer:
                 room_number = self.player_id_2_player_info[player_id]['room_number']
                 actions = self.room_info_map[room_number]['actions']
                 actions[player_id] = data['action']
+            elif cmd == CommandType.cmd_game_over:
+                data = param['data']
+
+                data = json.loads(data.decode())
+                player_id = data['player_id']
+                # 首先找到房间号
+                room_number = self.player_id_2_player_info[player_id]['room_number']
+                # 删除房间
+                del self.room_info_map[room_number]
+                print('the number of room[{}] has been removed, room remaining: {}.'.format(
+                    room_number, len(list(self.room_info_map.keys()))))
             else:
                 print(data)
         elif cmd == CallbackCommand.SocketClose:
@@ -174,20 +185,22 @@ class FightingAircraftGameServer:
                         pack_data=True,
                         data_type=DataType.TypeString)
             else:
-                room_number = self.player_id_2_player_info[player_id]['room_number']
-                # 首先判断他在哪个房间，如果房间没人了，直接把房间删了，否则就发送通知，某玩家离线
-                room_info = self.room_info_map[room_number]
-                room_info['tcp_list'].remove(tcp_client)
-                player_left_number = len(room_info['tcp_list'])
-                print('player_id: {} has offline, the room_number: {} has left {} players.'.format(
-                    player_id, room_number, player_left_number))
-                if player_left_number == 0:
-                    del self.room_info_map[room_number]
-                    print('the number of room[{}] has been removed, room remaining: {}.'.format(
-                        room_number, len(list(self.room_info_map.keys()))))
+                if player_id in self.player_id_2_player_info:
+                    room_number = self.player_id_2_player_info[player_id]['room_number']
+                    # 首先判断他在哪个房间，如果房间没人了，直接把房间删了，否则就发送通知，某玩家离线
+                    room_info = self.room_info_map[room_number]
+                    room_info['tcp_list'].remove(tcp_client)
+                    player_left_number = len(room_info['tcp_list'])
+                    print('player_id: {} has offline, the room_number: {} has left {} players.'.format(
+                        player_id, room_number, player_left_number))
+                    if player_left_number == 0:
+                        del self.room_info_map[room_number]
+                        print('the number of room[{}] has been removed, room remaining: {}.'.format(
+                            room_number, len(list(self.room_info_map.keys()))))
 
-                # 删除这两个用户
-                del self.player_id_2_player_info[player_id]
+                    # 删除这两个用户
+                    del self.player_id_2_player_info[player_id]
+
                 del self.tcp_client_2_player_id[tcp_client]
 
         # 释放线程锁
@@ -198,6 +211,7 @@ class FightingAircraftGameServer:
                                  'actions': {},
                                  'sync_time_stamp': 0}
 
+        print('server tick 10FPS!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
         while True:
             old_time = time.time()
             self.lock.acquire()
@@ -214,8 +228,9 @@ class FightingAircraftGameServer:
                 room_info['sync_time_stamp'] += 1
 
             self.lock.release()
+
             # 保证服务器以 30FPS 的速度转播玩家操作
-            self.clock.tick(15)
+            self.clock.tick(10)
 
             # print('\rserver FPS: {}'.format(1/(time.time()-old_time + 1e-10)), end='')
 

@@ -53,7 +53,7 @@ class TcpBaseTools:
         self.is_server = False
         self.callback_fun = None
         # self.start_thread = None
-        self.buffer_size = 4096
+        self.buffer_size = 8192
         # 表示对应协议头的协议类型为：
         # byte(frame header 1)+byte(frame header 2)+byte(cmd)+int(data length)
         self.header_bytes = b'\x0a\x0b'  # 占用两个字节

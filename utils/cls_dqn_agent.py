@@ -27,17 +27,31 @@ class AIAircraftNet(nn.Module):
         ==> 下一步的动作：加速，减速，左转，右转，左急转，右急转，拉升，无动作，主武器攻击，副武器攻击
             8 + 2 = 10
         """
-        self.map_fc1 = nn.Linear(7, 32)
-        self.map_fc2 = nn.Linear(32, 32)
-
-        self.output_fc = nn.Linear(32, 10)  # 输出层，产生8种可能的动作
+        # 输入为敌人的坐标状态数据
+        self.enemy_net = nn.Sequential(
+            nn.Linear(7, 32),
+            nn.Tanh(),
+            nn.Linear(32, 32),
+            nn.Tanh(),
+            nn.Linear(32, 11),
+            nn.Sigmoid()
+        )
+        # 输入为友军的坐标状态数据
+        # self.friend_net = nn.Sequential(
+        #     nn.Linear(7, 32),
+        #     nn.Tanh(),
+        #     nn.Linear(32, 32),
+        #     nn.Tanh(),
+        #     nn.Linear(32, 11),
+        #     nn.Sigmoid()
+        # )
 
     def forward(self, input_data):
-        x = F.relu(self.map_fc1(input_data.float()))  # 使用ReLU作为激活函数
-        x = F.relu(self.map_fc2(x))
-        output = self.output_fc(x)
-        probabilities = F.softmax(output, dim=1)  # 使用softmax激活函数得到输出的概率
-        return probabilities
+        output_1 = self.enemy_net(input_data.float())
+        # output_2 = self.friend_net(input_data.float())
+        # probabilities = F.softmax(output_1, dim=1)  # 使用softmax激活函数得到输出的概率
+
+        return output_1
 
 
 # --------------------------------------- #
@@ -68,7 +82,6 @@ class ReplayBuffer():
 # -------------------------------------- #
 # 构造深度强化学习模型
 # -------------------------------------- #
-
 class DQN:
     # （1）初始化
     def __init__(self, n_states, n_hidden, n_actions,

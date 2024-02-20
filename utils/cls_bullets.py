@@ -9,7 +9,7 @@ class Bullet(DynamicObject):
     def __init__(self, team_number, game_data):
         super().__init__(team_number, game_data)
         self._damage = 0
-        self.expired_time = 5000
+        self.expired_time = 2000
         self.time_passed = 0
         self.parent = None
 

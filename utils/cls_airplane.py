@@ -4,6 +4,7 @@ import numpy as np
 import pygame
 from overrides import overrides
 import torch
+from torch import nn
 
 from utils.cls_building import Building
 from utils.cls_bullets import *
@@ -55,6 +56,22 @@ class WeaponType(Enum):
     SD_4_x = 16         # SD4穿甲炸弹
     TOR_2x = 15         # 鱼雷*2
 
+def get_closest_relative_position(self_position, target_position, map_size):
+    """
+    计算在地图上两个坐标以哪条边计算的相对距离最短
+    :param self_position: ndarray, shape (2,)，自身的位置坐标 [x, y]
+    :param target_position: ndarray, shape (2,)，目标位置坐标 [x, y]
+    :param map_size: ndarray, shape (2,), 地图的尺寸 [map_width, map_height]
+    :return: closest_relative_position: ndarray, shape (2,), 最近的相对位置坐标 [dx, dy]
+    """
+    # 先计算差值
+    diff = target_position - self_position
+    shaped_map_size = map_size.reshape((2, 1))
+    # 对差值取mod map_size，实现在地图上找最短的相对位置
+    mod_diff = np.mod(diff + shaped_map_size / 2, shaped_map_size) - shaped_map_size / 2
+
+    return mod_diff
+
 def detect_airplane_target_obj(airplane_obj, target_objs, distance_threshold, angle_threshold):
     """
     根据自身位置和物体的位置来寻找到自身的攻击目标
@@ -105,13 +122,15 @@ class AirPlaneParams:
         self.plane_height = 0
         self.primary_weapon_reload_time = 0.5
         self.secondary_weapon_reload_time = 0.5
+        self.view_range = 1500
 
 
 class AirPlane(DynamicObject, Building):
     def __init__(self, team_number, game_data):
-        self.detected_AAM_targets = None
         DynamicObject.__init__(self, team_number, game_data)
         Building.__init__(self, team_number, game_data)
+        self.score = 0  # 指的是飞机在整局比赛中的score内容
+        self.detected_AAM_targets = None
         self.plane_type = PlaneType.Simple
         self.image_template = None
         self.air_plane_sprites = AirPlaneSprites()
@@ -129,6 +148,36 @@ class AirPlane(DynamicObject, Building):
         self.switch_direction = False
         self.agent_network = AIAircraftNet()
 
+    def load_agent_pth(self, pth_file):
+        # 如果加载训练模型注释掉下面内容
+        # 加载调整后的状态字典
+        for name, param1 in dict(self.agent_network.named_parameters()).items():
+            param2 = dict(torch.load(pth_file))[name]
+            setattr(self.agent_network, name.replace(".", "_"), nn.Parameter(param2.data.clone()))
+
+    def set_plane_params(self, plane_name, param, image_sprite, roll_mapping, pitch_mapping, explode_animation):
+        self.set_speed(param['speed'])
+        self.angular_speed = param['turnspeed']
+        self.durability = param['lifevalue']
+        params = self.get_air_plane_params()
+        params.name = plane_name
+        params.primary_weapon_reload_time = 0.2
+        params.secondary_weapon_reload_time = 0.1
+        params.plane_width = roll_mapping[0]['width']
+        params.plane_height = roll_mapping[0]['height']
+        self.set_air_plane_params(params)
+        # plane.air_plane_params.primary_weapon_reload_time = 0
+        # plane.air_plane_params.secondary_weapon_reload_time = 0
+        self.set_image_template(image_sprite)
+        self.air_plane_sprites.roll_mapping = roll_mapping
+        self.air_plane_sprites.pitch_mapping = pitch_mapping
+
+        self.explode_sub_textures = explode_animation[0]
+        self.explode_sprite = explode_animation[1]
+        # 刷新一下对应的 sprite, 防止出 bug
+        self.get_sprite()
+
+
     def ai_control(self, states):
         """
         只是 AI 生成控制策略，并没有进行物理更新
@@ -136,15 +185,15 @@ class AirPlane(DynamicObject, Building):
         :return:
         """
         if len(states) != 0:
-            actions_predict = self.agent_network.forward(torch.from_numpy(states.astype(float)))
+            actions_predict = self.agent_network.forward(torch.from_numpy(states.astype(float)).float())
             probs = torch.mean(actions_predict, dim=0)
-            print('\rcurrent action: 加速{:.3f} ，减速{:.3f} 左转{:.3f} 右转{:.3f} 左急转{:.3f} 右急转{:.3f} 拉升{:.3f} 无动作{:.3f} 主武器{:.3f} 副武器{:.3f}'.format(
-                probs[0], probs[1],probs[2],probs[3],probs[4],probs[5],probs[6],probs[7],probs[8],probs[9],), end='')
+            # print('\rcurrent action: 加速{:.3f} ，减速{:.3f} 左转{:.3f} 右转{:.3f} 左急转{:.3f} 右急转{:.3f} 拉升{:.3f} 无动作{:.3f} 主武器{:.3f} 副武器{:.3f}'.format(
+            #     probs[0], probs[1],probs[2],probs[3],probs[4],probs[5],probs[6],probs[7],probs[8],probs[9],), end='')
             # 将概率张量划分为三组
-            group1 = torch.stack((probs[0], probs[1], probs[7]), dim=0)  # 加速，减速，无动作
-            group2 = torch.stack((probs[2], probs[3], probs[4], probs[5], probs[7]),
-                                 dim=0)  # 左转，右转，左急转，右急转，无动作
-            group3 = torch.stack((probs[8], probs[9], probs[7]), dim=0)  # 主武器攻击，副武器攻击
+            group1 = torch.stack((probs[0], probs[1], probs[2]), dim=0)  # 加速，减速，无加减速
+            group2 = torch.stack((probs[3], probs[4], probs[5], probs[6], probs[7]),
+                                 dim=0)  # 左转，右转，左急转，右急转，无转向
+            group3 = torch.stack((probs[8], probs[9], probs[10]), dim=0)  # 主武器攻击，副武器攻击，无攻击
             # 找到每组中概率最大的动作
             max_prob_action_group1 = torch.argmax(group1)
             max_prob_action_group2 = torch.argmax(group2)
@@ -175,35 +224,50 @@ class AirPlane(DynamicObject, Building):
         states = []
         vec_self = self.get_direction_vector()
         for plane in planes_list:
-            pos = plane.get_position() - self.get_position()
-            vec_1 = plane.get_direction_vector()
-            # 计算两个向量的夹角
-            cosine_angle = np.dot(vec_self.T, vec_1) / (np.linalg.norm(vec_self) * np.linalg.norm(vec_1))
-            angle = np.arccos(cosine_angle)[0]
-            # 以向量夹角构造一个新的向量
-            new_vector = np.array([np.cos(angle), np.sin(angle)])
-            velocity = plane.velocity
-            angular_velocity = plane.angular_velocity
-            states.append(
-                np.hstack((pos.reshape((-1)), new_vector.reshape((-1)),
-                           np.array([velocity]), np.array([angular_velocity]),
-                           np.array([self._engine_temperature]))))
+            """
+            注意数据归一化（采用tanh作为激活函数）：
+            """
+            pos = get_closest_relative_position(
+                plane.get_position(), self.get_position(), self.get_map_size())
+            if np.linalg.norm(pos) <= self._air_plane_params.view_range * 1.5:
+                # 1. 相对位置坐标归一化
+                pos = pos / self._air_plane_params.view_range
+
+                # 2. 方向向量本来就是标准的
+                vec_1 = plane.get_direction_vector()
+                # 计算两个向量的夹角
+                cosine_angle = np.dot(vec_self.T, vec_1) / (np.linalg.norm(vec_self) * np.linalg.norm(vec_1))
+                angle = np.arccos(cosine_angle)[0]
+                # 以向量夹角构造一个新的向量
+                new_vector = np.array([np.cos(angle), np.sin(angle)])
+
+                # 3. 速度以标准速度作为参考量
+                velocity = plane.velocity / 3
+                angular_velocity = plane.angular_velocity / 3
+
+                # 发动机温度
+                engine_temperature = self._engine_temperature / 100
+
+                # 构造网络输入
+                states.append(
+                    np.hstack((pos.reshape((-1)), new_vector.reshape((-1)),
+                               np.array([velocity]), np.array([angular_velocity]),
+                               np.array([engine_temperature]))))
 
         return np.array(states)
 
     def take_damage(self, damage):
         self.durability -= damage
         if self.durability <= 0:
+            self.score -= 20
             self.game_data.remove_team_airplanes(self)
             self.on_death()
             return True
         else:
             return False
 
-    def load_sprite(self, img_file_name):
-        self.image_template = pygame.image.load(img_file_name)
-
-        return self.image_template
+    def set_image_template(self, image_template):
+        self.image_template = image_template
 
     def get_air_plane_params(self):
         return self._air_plane_params
@@ -402,6 +466,7 @@ class AirPlane(DynamicObject, Building):
         if self._air_plane_params.engine_heat_rate == 0:
             # 如果发动机温度过高，持续一段时间后再降温
             if self._engine_temperature >= 100:
+                self.score -= 0.2
                 if self.heat_counter >= self._air_plane_params.overheat_duration:
                     self._air_plane_params.engine_heat_rate = -0.3
             else:
@@ -440,17 +505,19 @@ class AirPlane(DynamicObject, Building):
             else:
                 self.secondary_weapon_reload_counter -= delta_time * 0.001
 
+        # 先不检测目标了
         # 获取到敌人的飞机坐标
-        target_team_number = 0
-        if self.team_number == 1:
-            target_team_number = 2
-        elif self.team_number == 2:
-            target_team_number = 1
-        else:
-            print('wrong team number')
-        self.detected_AAM_targets = detect_airplane_target_obj(
-            self, self.game_data.get_team_airplanes(target_team_number),
-            800, 30)
+        # target_team_number = 0
+        # if self.team_number == 1:
+        #     target_team_number = 2
+        # elif self.team_number == 2:
+        #     target_team_number = 1
+        # else:
+        #     print('wrong team number')
+        #
+        # self.detected_AAM_targets = detect_airplane_target_obj(
+        #     self, self.game_data.get_team_airplanes(target_team_number),
+        #     800, 30)
 
         # --------------------------------------------------------------------
         # 重置飞行状态
@@ -465,6 +532,7 @@ class AirPlane(DynamicObject, Building):
         self.set_position(pos)
 
     def take_damage(self, damage):
+        self.score -= damage * 0.5
         health = self.durability
         health -= damage
         # print(f'take_damage: {damage}')
@@ -474,6 +542,7 @@ class AirPlane(DynamicObject, Building):
             # self._air_plane_params.health_points = health
             self.create_explode()
             self.on_death()
+            self.score -= 10
             return True
         else:
             return False
@@ -576,11 +645,14 @@ class FighterJet(AirPlane):
         #     np.array([self._air_plane_params.plane_height * 0.4, 0]),
         #     self.get_direction_vector()
         # )
+        self.score -= 0.05
         height_start = self._air_plane_params.plane_height * 0.4
-        position_list = [[height_start, self._air_plane_params.plane_height * 0.3],
-                         [height_start, self._air_plane_params.plane_height * 0.1],
-                         [height_start, -self._air_plane_params.plane_height * 0.1],
-                         [height_start, -self._air_plane_params.plane_height * 0.3]]
+        position_list = [
+            # [height_start, self._air_plane_params.plane_height * 0.3],
+            [height_start, self._air_plane_params.plane_height * 0.1],
+            [height_start, -self._air_plane_params.plane_height * 0.1]
+            # [height_start, -self._air_plane_params.plane_height * 0.3]
+            ]
 
         for pos in position_list:
             self.create_bullet(
@@ -588,6 +660,7 @@ class FighterJet(AirPlane):
                 self.get_direction_vector())
 
     def secondary_weapon_attack(self):
+        self.score -= 0.025
         position_list = [[self._air_plane_params.plane_height * 0.4, 0]]
 
         for pos in position_list:
